@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE QtCreatorProject>
-<!-- Written by QtCreator 14.0.2, 2025-02-24T22:17:35. -->
+<!-- Written by QtCreator 14.0.2, 2025-03-23T17:19:59. -->
 <qtcreator>
  <data>
   <variable>EnvironmentId</variable>
@@ -244,7 +244,7 @@
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName">setup.py</value>
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">PythonEditor.RunConfiguration./Users/user/QTprojets/Library/setup.py</value>
     <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">/Users/user/QTprojets/Library/setup.py</value>
-    <value type="bool" key="ProjectExplorer.RunConfiguration.Customized">false</value>
+    <value type="bool" key="ProjectExplorer.RunConfiguration.Customized">true</value>
     <value type="QString" key="PythonEditor.RunConfiguation.Script">/Users/user/QTprojets/Library/setup.py</value>
     <value type="bool" key="RunConfiguration.UseCppDebuggerAuto">true</value>
     <value type="bool" key="RunConfiguration.UseQmlDebuggerAuto">true</value>

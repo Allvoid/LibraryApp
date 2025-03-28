@@ -23,23 +23,28 @@
         ]
     },
     {
-        "last_name": "dd",
-        "first_name": "ddd",
-        "middle_name": "ddddd",
-        "class": "10",
-        "parallel": "А",
-        "books": [
-            "Ванька - Антон Чехов",
-            "Пиковая дама - Александр Пушкин",
-            "Евгений Онегин - Александр Пушкин"
-        ]
-    },
-    {
         "last_name": "ff",
         "first_name": "ff",
         "middle_name": "ff",
         "class": "1",
         "parallel": "А",
         "books": []
+    },
+    {
+        "last_name": "new",
+        "first_name": "new",
+        "middle_name": "new",
+        "class": "9",
+        "parallel": "Д",
+        "books": [
+            {
+                "book": "Пиковая дама - Александр Пушкин",
+                "due_date": "28.03.2025"
+            },
+            {
+                "book": "Бедные люди - Федор Достоевский",
+                "due_date": "20.03.2025"
+            }
+        ]
     }
 ]

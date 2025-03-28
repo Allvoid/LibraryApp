@@ -6,9 +6,9 @@ from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QComboBox, QDialog, QFormLayout, QMessageBox, QLineEdit, QCompleter, QStyle,
     QSizePolicy, QStackedWidget, QTableWidget, QTableWidgetItem, QListWidget,
-    QGroupBox, QHeaderView
+    QGroupBox, QHeaderView, QDateEdit
 )
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QDate
 
 # Абсолютные пути для файлов (находятся в той же папке, что и этот файл)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -23,7 +23,7 @@ else:
 
 
 # =============================================================
-# Диалог для добавления/редактирования ученика с выбором книг
+# Диалог для добавления/редактирования ученика с выбором книг и датой сдачи
 # =============================================================
 class StudentDialog(QDialog):
     def __init__(self, parent=None, student_data=None, books_list=None, classes_list=None, parallels_list=None):
@@ -32,7 +32,7 @@ class StudentDialog(QDialog):
         self.books_list = books_list if books_list is not None else []
         self.classes_list = classes_list if classes_list is not None else []
         self.parallels_list = parallels_list if parallels_list is not None else []
-        # Каждый элемент хранится как кортеж (container, combo, delete_btn)
+        # Каждый элемент хранится как кортеж (container, combo, date_edit, delete_btn)
         self.book_selectors = []
         self.setWindowTitle("Редактировать ученика" if student_data else "Добавить ученика")
         self._init_ui()
@@ -61,7 +61,7 @@ class StudentDialog(QDialog):
         self.parallel_combo.addItems(self.parallels_list)
         layout.addRow("Параллель:", self.parallel_combo)
 
-        # Область для выбора книг
+        # Область для выбора книг с датой сдачи
         self.books_widget = QWidget()
         self.books_layout = QVBoxLayout(self.books_widget)
         self.books_layout.setContentsMargins(0, 0, 0, 0)
@@ -72,6 +72,7 @@ class StudentDialog(QDialog):
         add_book_btn.clicked.connect(lambda: self.add_book_selector())
         layout.addRow(add_book_btn)
 
+        # Если данные ученика существуют, заполняем поля
         if self.student_data:
             self.last_name_edit.setText(self.student_data.get("last_name", ""))
             self.first_name_edit.setText(self.student_data.get("first_name", ""))
@@ -81,7 +82,12 @@ class StudentDialog(QDialog):
             books = self.student_data.get("books", [])
             if books:
                 for bk in books:
-                    self.add_book_selector(initial_text=bk)
+                    if isinstance(bk, dict):
+                        initial_text = bk.get("book", "")
+                        initial_date = QDate.fromString(bk.get("due_date", ""), "dd.MM.yyyy")
+                        self.add_book_selector(initial_text=initial_text, initial_date=initial_date)
+                    else:
+                        self.add_book_selector(initial_text=bk)
             else:
                 self.add_book_selector()
         else:
@@ -100,7 +106,7 @@ class StudentDialog(QDialog):
         btn_layout.addWidget(save_btn)
         layout.addRow(btn_layout)
 
-    def add_book_selector(self, initial_text=""):
+    def add_book_selector(self, initial_text="", initial_date=None):
         container = QWidget()
         h_layout = QHBoxLayout(container)
         h_layout.setContentsMargins(0, 0, 0, 0)
@@ -115,6 +121,16 @@ class StudentDialog(QDialog):
         combo.setCurrentText(initial_text)
         h_layout.addWidget(combo)
 
+        # Виджет для выбора даты сдачи книги
+        date_edit = QDateEdit()
+        date_edit.setCalendarPopup(True)
+        date_edit.setDisplayFormat("dd.MM.yyyy")
+        if initial_date and initial_date.isValid():
+            date_edit.setDate(initial_date)
+        else:
+            date_edit.setDate(QDate.currentDate())
+        h_layout.addWidget(date_edit)
+
         delete_btn = QPushButton()
         trash_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon)
         delete_btn.setIcon(trash_icon)
@@ -122,16 +138,14 @@ class StudentDialog(QDialog):
         delete_btn.setFlat(True)
         h_layout.addWidget(delete_btn)
 
-        # Добавляем кортеж (container, combo, delete_btn)
-        self.book_selectors.append((container, combo, delete_btn))
+        self.book_selectors.append((container, combo, date_edit, delete_btn))
         self.books_layout.addWidget(container)
 
-        # Отложенный вызов удаления для избежания краша
         delete_btn.clicked.connect(lambda: QTimer.singleShot(0, lambda: self.remove_book_selector(container)))
         self.update_delete_buttons()
 
     def remove_book_selector(self, container):
-        for i, (cont, combo, delete_btn) in enumerate(self.book_selectors):
+        for i, (cont, combo, date_edit, delete_btn) in enumerate(self.book_selectors):
             if cont is container:
                 self.book_selectors.pop(i)
                 container.setParent(None)
@@ -141,12 +155,16 @@ class StudentDialog(QDialog):
 
     def update_delete_buttons(self):
         count = len(self.book_selectors)
-        for (container, combo, delete_btn) in self.book_selectors:
-            # Если остается только один выбор, кнопка удаления отключается
+        for (container, combo, date_edit, delete_btn) in self.book_selectors:
             delete_btn.setEnabled(False if count == 1 else True)
 
     def get_data(self):
-        books = [combo.currentText().strip() for (_, combo, _) in self.book_selectors if combo.currentText().strip()]
+        books = []
+        for (_, combo, date_edit, _) in self.book_selectors:
+            book_text = combo.currentText().strip()
+            if book_text:
+                due_date = date_edit.date().toString("dd.MM.yyyy")
+                books.append({"book": book_text, "due_date": due_date})
         return {
             "last_name": self.last_name_edit.text().strip(),
             "first_name": self.first_name_edit.text().strip(),
@@ -353,8 +371,12 @@ class LibraryApp(QWidget):
         add_student_btn.clicked.connect(self.add_student)
         layout.addWidget(add_student_btn)
 
-        self.readers_table = QTableWidget(0, 7)
-        self.readers_table.setHorizontalHeaderLabels(["Id", "Фамилия", "Имя", "Отчество", "Класс", "Параллель", "Книги"])
+        # Теперь таблица имеет 8 столбцов:
+        # Id, Фамилия, Имя, Отчество, Класс, Параллель, Книги, Срок сдачи
+        self.readers_table = QTableWidget(0, 8)
+        self.readers_table.setHorizontalHeaderLabels(
+            ["Id", "Фамилия", "Имя", "Отчество", "Класс", "Параллель", "Книги", "Срок сдачи"]
+        )
         self.readers_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.readers_table.doubleClicked.connect(self.edit_student)
         layout.addWidget(self.readers_table)
@@ -430,7 +452,18 @@ class LibraryApp(QWidget):
         self.readers_table.setItem(row, 3, QTableWidgetItem(data["middle_name"]))
         self.readers_table.setItem(row, 4, QTableWidgetItem(data["class"]))
         self.readers_table.setItem(row, 5, QTableWidgetItem(data["parallel"]))
-        self.readers_table.setItem(row, 6, QTableWidgetItem(", ".join(data.get("books", []))))
+        # Разделяем книги и даты сдачи в разные столбцы
+        books_list = data.get("books", [])
+        book_names = []
+        due_dates = []
+        for b in books_list:
+            if isinstance(b, dict):
+                book_names.append(b.get("book", ""))
+                due_dates.append(b.get("due_date", ""))
+            else:
+                book_names.append(b)
+        self.readers_table.setItem(row, 6, QTableWidgetItem(", ".join(book_names)))
+        self.readers_table.setItem(row, 7, QTableWidgetItem(", ".join(due_dates)))
 
     def create_books_page(self):
         page = QWidget()

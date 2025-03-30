@@ -1,0 +1,44 @@
+[
+    {
+        "last_name": "eqweqw",
+        "first_name": "eqweq",
+        "middle_name": "qwe",
+        "class": "2",
+        "parallel": "Д",
+        "books": [
+            "Война и мир - Лев Толстой",
+            "Ревизор - Николай Гоголь"
+        ]
+    },
+    {
+        "last_name": "рр",
+        "first_name": "рр",
+        "middle_name": "рр",
+        "class": "3",
+        "parallel": "Л",
+        "books": [
+            "Война и мир - Лев Толстой",
+            "Руслан и Людмила - Александр Пушкин",
+            "Ревизор - Николай Гоголь"
+        ]
+    },
+    {
+        "last_name": "dd",
+        "first_name": "ddd",
+        "middle_name": "ddddd",
+        "class": "10",
+        "parallel": "А",
+        "books": [
+            "Ванька - Антон Чехов",
+            "Записки сумасшедшего - Николай Гоголь"
+        ]
+    },
+    {
+        "last_name": "ff",
+        "first_name": "ff",
+        "middle_name": "ff",
+        "class": "1",
+        "parallel": "А",
+        "books": []
+    }
+]

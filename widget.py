@@ -9,7 +9,10 @@ from PyQt6.QtWidgets import (
     QGroupBox, QHeaderView, QDateEdit
 )
 from PyQt6.QtCore import Qt, QTimer, QDate
+<<<<<<< HEAD
 from PyQt6.QtGui import QColor
+=======
+>>>>>>> e7b8c7e5b966c5b5cd33fe5e31e986dbe401e6a1
 
 # Абсолютные пути для файлов (находятся в той же папке, что и этот файл)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -364,6 +367,7 @@ class LibraryApp(QWidget):
         self.parallel_filter.addItem("Все")
         self.parallel_filter.addItems(self.config.get("parallels", []))
         filters_layout.addWidget(self.parallel_filter)
+<<<<<<< HEAD
         # Добавляем кнопку выбора сортировки по дате сдачи (вместо фильтрации)
         filters_layout.addWidget(QLabel("Сортировать по дате сдачи:"))
         self.due_date_filter = QComboBox()
@@ -372,13 +376,21 @@ class LibraryApp(QWidget):
         self.class_filter.currentTextChanged.connect(lambda: self.on_filters_changed())
         self.parallel_filter.currentTextChanged.connect(lambda: self.on_filters_changed())
         self.due_date_filter.currentTextChanged.connect(lambda: self.on_filters_changed())
+=======
+        self.class_filter.currentTextChanged.connect(lambda: self.on_filters_changed())
+        self.parallel_filter.currentTextChanged.connect(lambda: self.on_filters_changed())
+>>>>>>> e7b8c7e5b966c5b5cd33fe5e31e986dbe401e6a1
         layout.addLayout(filters_layout)
 
         add_student_btn = QPushButton("Добавить ученика")
         add_student_btn.clicked.connect(self.add_student)
         layout.addWidget(add_student_btn)
 
+<<<<<<< HEAD
         # Таблица читателей с 8 столбцами:
+=======
+        # Теперь таблица имеет 8 столбцов:
+>>>>>>> e7b8c7e5b966c5b5cd33fe5e31e986dbe401e6a1
         # Id, Фамилия, Имя, Отчество, Класс, Параллель, Книги, Срок сдачи
         self.readers_table = QTableWidget(0, 8)
         self.readers_table.setHorizontalHeaderLabels(
@@ -402,7 +414,10 @@ class LibraryApp(QWidget):
 
     def start_lazy_loading_readers(self, reset_books=True):
         self.lazy_cancelled = False
+<<<<<<< HEAD
         # Фильтруем учеников по ФИО, классу и параллели (по дате сортировку выполняем отдельно)
+=======
+>>>>>>> e7b8c7e5b966c5b5cd33fe5e31e986dbe401e6a1
         self.lazy_readers_data = self.get_filtered_students()
         self.current_reader_index = 0
         self.total_readers = len(self.lazy_readers_data)
@@ -447,6 +462,7 @@ class LibraryApp(QWidget):
                         fio_query in st.get("middle_name", "").lower()):
                     continue
             filtered.append(st)
+<<<<<<< HEAD
         # Сортировка по дате сдачи в зависимости от выбора:
         sort_option = self.due_date_filter.currentText() if hasattr(self, 'due_date_filter') else "Все"
         if sort_option == "Сдать раньше":
@@ -477,6 +493,8 @@ class LibraryApp(QWidget):
                 else:
                     return QDate(1900, 1, 1)
             filtered.sort(key=sort_key, reverse=True)
+=======
+>>>>>>> e7b8c7e5b966c5b5cd33fe5e31e986dbe401e6a1
         return filtered
 
     def insert_student_in_table(self, row, data):
@@ -494,6 +512,7 @@ class LibraryApp(QWidget):
         books_list = data.get("books", [])
         book_names = []
         due_dates = []
+<<<<<<< HEAD
         overdue = False
         current_date = QDate.currentDate()
         for b in books_list:
@@ -504,16 +523,25 @@ class LibraryApp(QWidget):
                 d = QDate.fromString(due_date_str, "dd.MM.yyyy")
                 if d.isValid() and d < current_date:
                     overdue = True
+=======
+        for b in books_list:
+            if isinstance(b, dict):
+                book_names.append(b.get("book", ""))
+                due_dates.append(b.get("due_date", ""))
+>>>>>>> e7b8c7e5b966c5b5cd33fe5e31e986dbe401e6a1
             else:
                 book_names.append(b)
         self.readers_table.setItem(row, 6, QTableWidgetItem(", ".join(book_names)))
         self.readers_table.setItem(row, 7, QTableWidgetItem(", ".join(due_dates)))
+<<<<<<< HEAD
         # Если срок сдачи просрочен, выделяем всю строку красным
         if overdue:
             for col in range(self.readers_table.columnCount()):
                 item = self.readers_table.item(row, col)
                 if item:
                     item.setBackground(QColor("red"))
+=======
+>>>>>>> e7b8c7e5b966c5b5cd33fe5e31e986dbe401e6a1
 
     def create_books_page(self):
         page = QWidget()

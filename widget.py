@@ -9,10 +9,7 @@ from PyQt6.QtWidgets import (
     QGroupBox, QHeaderView, QDateEdit
 )
 from PyQt6.QtCore import Qt, QTimer, QDate
-<<<<<<< HEAD
-from PyQt6.QtGui import QColor
-=======
->>>>>>> e7b8c7e5b966c5b5cd33fe5e31e986dbe401e6a1
+from PyQt6.QtGui import QColor, QIntValidator
 
 # Абсолютные пути для файлов (находятся в той же папке, что и этот файл)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -180,7 +177,7 @@ class StudentDialog(QDialog):
 
 
 # =============================================================
-# Диалог для добавления книги
+# Диалог для добавления книги с полем количества
 # =============================================================
 class BookDialog(QDialog):
     def __init__(self, parent=None):
@@ -195,8 +192,12 @@ class BookDialog(QDialog):
         self.title_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.author_edit = QLineEdit()
         self.author_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.quantity_edit = QLineEdit()
+        # Устанавливаем валидатор для целых чисел (пустое значение допускается)
+        self.quantity_edit.setValidator(QIntValidator(1, 1000000, self))
         layout.addRow("Название:", self.title_edit)
         layout.addRow("Автор:", self.author_edit)
+        layout.addRow("Количество (необязательно):", self.quantity_edit)
         btn_layout = QHBoxLayout()
         cancel_btn = QPushButton("Отмена")
         cancel_btn.clicked.connect(self.reject)
@@ -207,9 +208,12 @@ class BookDialog(QDialog):
         layout.addRow(btn_layout)
 
     def get_data(self):
+        quantity_text = self.quantity_edit.text().strip()
+        quantity = int(quantity_text) if quantity_text else None
         return {
             "Title": self.title_edit.text().strip(),
-            "Author": self.author_edit.text().strip()
+            "Author": self.author_edit.text().strip(),
+            "quantity": quantity  # Может быть None, если поле пустое
         }
 
 
@@ -367,8 +371,7 @@ class LibraryApp(QWidget):
         self.parallel_filter.addItem("Все")
         self.parallel_filter.addItems(self.config.get("parallels", []))
         filters_layout.addWidget(self.parallel_filter)
-<<<<<<< HEAD
-        # Добавляем кнопку выбора сортировки по дате сдачи (вместо фильтрации)
+        # Комбобокс для сортировки по дате сдачи (без фильтрации)
         filters_layout.addWidget(QLabel("Сортировать по дате сдачи:"))
         self.due_date_filter = QComboBox()
         self.due_date_filter.addItems(["Все", "Сдать раньше", "Сдать позже"])
@@ -376,21 +379,13 @@ class LibraryApp(QWidget):
         self.class_filter.currentTextChanged.connect(lambda: self.on_filters_changed())
         self.parallel_filter.currentTextChanged.connect(lambda: self.on_filters_changed())
         self.due_date_filter.currentTextChanged.connect(lambda: self.on_filters_changed())
-=======
-        self.class_filter.currentTextChanged.connect(lambda: self.on_filters_changed())
-        self.parallel_filter.currentTextChanged.connect(lambda: self.on_filters_changed())
->>>>>>> e7b8c7e5b966c5b5cd33fe5e31e986dbe401e6a1
         layout.addLayout(filters_layout)
 
         add_student_btn = QPushButton("Добавить ученика")
         add_student_btn.clicked.connect(self.add_student)
         layout.addWidget(add_student_btn)
 
-<<<<<<< HEAD
         # Таблица читателей с 8 столбцами:
-=======
-        # Теперь таблица имеет 8 столбцов:
->>>>>>> e7b8c7e5b966c5b5cd33fe5e31e986dbe401e6a1
         # Id, Фамилия, Имя, Отчество, Класс, Параллель, Книги, Срок сдачи
         self.readers_table = QTableWidget(0, 8)
         self.readers_table.setHorizontalHeaderLabels(
@@ -414,10 +409,7 @@ class LibraryApp(QWidget):
 
     def start_lazy_loading_readers(self, reset_books=True):
         self.lazy_cancelled = False
-<<<<<<< HEAD
-        # Фильтруем учеников по ФИО, классу и параллели (по дате сортировку выполняем отдельно)
-=======
->>>>>>> e7b8c7e5b966c5b5cd33fe5e31e986dbe401e6a1
+        # Фильтруем учеников по ФИО, классу и параллели (сортировка по дате выполняется отдельно)
         self.lazy_readers_data = self.get_filtered_students()
         self.current_reader_index = 0
         self.total_readers = len(self.lazy_readers_data)
@@ -462,7 +454,6 @@ class LibraryApp(QWidget):
                         fio_query in st.get("middle_name", "").lower()):
                     continue
             filtered.append(st)
-<<<<<<< HEAD
         # Сортировка по дате сдачи в зависимости от выбора:
         sort_option = self.due_date_filter.currentText() if hasattr(self, 'due_date_filter') else "Все"
         if sort_option == "Сдать раньше":
@@ -493,8 +484,6 @@ class LibraryApp(QWidget):
                 else:
                     return QDate(1900, 1, 1)
             filtered.sort(key=sort_key, reverse=True)
-=======
->>>>>>> e7b8c7e5b966c5b5cd33fe5e31e986dbe401e6a1
         return filtered
 
     def insert_student_in_table(self, row, data):
@@ -512,7 +501,6 @@ class LibraryApp(QWidget):
         books_list = data.get("books", [])
         book_names = []
         due_dates = []
-<<<<<<< HEAD
         overdue = False
         current_date = QDate.currentDate()
         for b in books_list:
@@ -523,25 +511,16 @@ class LibraryApp(QWidget):
                 d = QDate.fromString(due_date_str, "dd.MM.yyyy")
                 if d.isValid() and d < current_date:
                     overdue = True
-=======
-        for b in books_list:
-            if isinstance(b, dict):
-                book_names.append(b.get("book", ""))
-                due_dates.append(b.get("due_date", ""))
->>>>>>> e7b8c7e5b966c5b5cd33fe5e31e986dbe401e6a1
             else:
                 book_names.append(b)
         self.readers_table.setItem(row, 6, QTableWidgetItem(", ".join(book_names)))
         self.readers_table.setItem(row, 7, QTableWidgetItem(", ".join(due_dates)))
-<<<<<<< HEAD
         # Если срок сдачи просрочен, выделяем всю строку красным
         if overdue:
             for col in range(self.readers_table.columnCount()):
                 item = self.readers_table.item(row, col)
                 if item:
                     item.setBackground(QColor("red"))
-=======
->>>>>>> e7b8c7e5b966c5b5cd33fe5e31e986dbe401e6a1
 
     def create_books_page(self):
         page = QWidget()
@@ -556,8 +535,9 @@ class LibraryApp(QWidget):
         search_layout.addWidget(self.book_search_edit)
         layout.addLayout(search_layout)
 
-        self.books_table = QTableWidget(0, 2)
-        self.books_table.setHorizontalHeaderLabels(["Название", "Автор"])
+        # Теперь таблица имеет 3 столбца: Название, Автор, Количество
+        self.books_table = QTableWidget(0, 3)
+        self.books_table.setHorizontalHeaderLabels(["Название", "Автор", "Количество"])
         self.books_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.books_table)
 
@@ -606,6 +586,8 @@ class LibraryApp(QWidget):
             self.books_table.insertRow(row)
             self.books_table.setItem(row, 0, QTableWidgetItem(book.get("Title", "")))
             self.books_table.setItem(row, 1, QTableWidgetItem(book.get("Author", "")))
+            quantity = book.get("quantity")
+            self.books_table.setItem(row, 2, QTableWidgetItem(str(quantity) if quantity is not None else ""))
         self.current_book_index = end_index
         self.update_books_status()
         if self.current_book_index < self.total_books:
@@ -625,7 +607,7 @@ class LibraryApp(QWidget):
                 self.save_books()
                 self.start_lazy_loading_books()
             else:
-                QMessageBox.warning(self, "Ошибка", "Оба поля должны быть заполнены!")
+                QMessageBox.warning(self, "Ошибка", "Поля «Название» и «Автор» должны быть заполнены!")
 
     def delete_book(self):
         selected = self.books_table.selectedItems()
@@ -736,6 +718,45 @@ class LibraryApp(QWidget):
         self.parallel_filter.addItems(parallels)
         QMessageBox.information(self, "Сохранено", "Настройки сохранены.")
 
+    def count_issued(self, book_str, exclude_student=None):
+        """Подсчитывает, сколько экземпляров книги (по строке book_str, как в combo)
+        уже выдано во всех записях (исключая запись exclude_student, если задана)."""
+        count = 0
+        for st in self.students:
+            if exclude_student is not None and st is exclude_student:
+                continue
+            for b in st.get("books", []):
+                if isinstance(b, dict) and b.get("book", "") == book_str:
+                    count += 1
+        return count
+
+    def check_issued_limits(self, new_student, exclude_student=None):
+        """Проверяет, что по каждой книге из new_student выдается не больше копий, чем указано.
+        Если exclude_student задана (при редактировании), её записи не учитываются."""
+        # Собираем количество выдач для новой записи
+        new_counts = {}
+        for b in new_student.get("books", []):
+            book_str = b.get("book", "")
+            if book_str:
+                new_counts[book_str] = new_counts.get(book_str, 0) + 1
+        # Для каждой книги ищем её запись в библиотеке (по get_books_display_list)
+        for book_str, new_count in new_counts.items():
+            # Ищем соответствующую книгу в self.books по формату "Title - Author"
+            lib_book = None
+            for book in self.books:
+                display_str = f'{book.get("Title", "")} - {book.get("Author", "")}'
+                if display_str == book_str:
+                    lib_book = book
+                    break
+            if lib_book and lib_book.get("quantity") is not None:
+                available = int(lib_book.get("quantity"))
+                current = self.count_issued(book_str, exclude_student=exclude_student)
+                if current + new_count > available:
+                    QMessageBox.warning(self, "Ошибка",
+                        f"Недостаточно экземпляров книги: {book_str}\nВыдано: {current}, доступно: {available}")
+                    return False
+        return True
+
     def add_student(self):
         dlg = StudentDialog(
             self,
@@ -747,6 +768,9 @@ class LibraryApp(QWidget):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             data = dlg.get_data()
             if not self.validate_student_data(data):
+                return
+            # Проверяем лимит выдачи книг
+            if not self.check_issued_limits(data):
                 return
             self.students.append(data)
             self.save_students()
@@ -772,10 +796,13 @@ class LibraryApp(QWidget):
             self.save_students()
             self.start_lazy_loading_readers(reset_books=False)
         elif res == QDialog.DialogCode.Accepted:
-            data = dlg.get_data()
-            if not self.validate_student_data(data):
+            new_data = dlg.get_data()
+            if not self.validate_student_data(new_data):
                 return
-            self.students[full_index] = data
+            # При редактировании исключаем старую запись из подсчёта
+            if not self.check_issued_limits(new_data, exclude_student=student):
+                return
+            self.students[full_index] = new_data
             self.save_students()
             self.start_lazy_loading_readers(reset_books=False)
 
@@ -792,6 +819,7 @@ class LibraryApp(QWidget):
         return bool(re.fullmatch(r"[А-Яа-яA-Za-z-]+", text.strip()))
 
     def get_books_display_list(self):
+        # Формат: "Title - Author"
         return [f'{b.get("Title", "")} - {b.get("Author", "")}' for b in self.books]
 
     def shift_students(self):
@@ -838,9 +866,14 @@ class LibraryApp(QWidget):
                 with open(books_path, "r", encoding="utf-8") as f:
                     for line in f:
                         line = line.strip().rstrip(',')
-                        m = re.search(r'\{Title\s*=\s*"([^"]+)"\s*,\s*Author\s*=\s*"([^"]+)"\}', line)
+                        # Регулярное выражение для захвата Title, Author и необязательного Quantity
+                        m = re.search(r'\{Title\s*=\s*"([^"]+)"\s*,\s*Author\s*=\s*"([^"]+)"(?:\s*,\s*Quantity\s*=\s*"([^"]*)")?\}', line)
                         if m:
-                            books.append({"Title": m.group(1), "Author": m.group(2)})
+                            title = m.group(1)
+                            author = m.group(2)
+                            quantity_str = m.group(3)
+                            quantity = int(quantity_str) if quantity_str and quantity_str.isdigit() else None
+                            books.append({"Title": title, "Author": author, "quantity": quantity})
             except Exception as e:
                 print("Ошибка загрузки литература.txt:", e)
         return books
@@ -849,7 +882,9 @@ class LibraryApp(QWidget):
         try:
             with open(books_path, "w", encoding="utf-8") as f:
                 for book in self.books:
-                    line = f'{{Title = "{book.get("Title", "")}", Author = "{book.get("Author", "")}"}},\n'
+                    quantity = book.get("quantity")
+                    q_str = f'", Quantity = "{quantity}"' if quantity is not None else ""
+                    line = f'{{Title = "{book.get("Title", "")}", Author = "{book.get("Author", "")}"{q_str}}},\n'
                     f.write(line)
         except Exception as e:
             print("Ошибка сохранения литература.txt:", e)

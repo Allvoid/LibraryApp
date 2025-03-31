@@ -1,66 +1,15 @@
 [
     {
-        "last_name": "eqweqw",
-        "first_name": "eqweq",
-        "middle_name": "qwe",
-        "class": "2",
-        "parallel": "Д",
-        "books": [
-            "Война и мир - Лев Толстой",
-            "Ревизор - Николай Гоголь"
-        ]
-    },
-    {
-        "last_name": "рр",
-        "first_name": "рр",
-        "middle_name": "рр",
-        "class": "3",
-        "parallel": "Л",
-        "books": [
-            "Война и мир - Лев Толстой",
-            "Руслан и Людмила - Александр Пушкин",
-            "Ревизор - Николай Гоголь"
-        ]
-    },
-    {
-        "last_name": "ff",
-        "first_name": "ff",
-        "middle_name": "ff",
-        "class": "1",
-        "parallel": "А",
-        "books": []
-    },
-    {
-        "last_name": "new",
-        "first_name": "new",
-        "middle_name": "new",
-        "class": "9",
-        "parallel": "Д",
-        "books": [
-            {
-                "book": "Пиковая дама - Александр Пушкин",
-                "due_date": "28.03.2025"
-            },
-            {
-                "book": "Бедные люди - Федор Достоевский",
-                "due_date": "20.03.2025"
-            }
-        ]
-<<<<<<< HEAD
-    },
-    {
-        "last_name": "late",
-        "first_name": "ffff",
-        "middle_name": "fffff",
+        "last_name": "моя",
+        "first_name": "книга",
+        "middle_name": "два",
         "class": "7",
-        "parallel": "Д",
+        "parallel": "А",
         "books": [
             {
-                "book": "Преступление и наказание - Федор Достоевский",
-                "due_date": "06.04.2025"
+                "book": "Евгений Онегин - Александр Пушкин",
+                "due_date": "31.03.2025"
             }
         ]
-=======
->>>>>>> e7b8c7e5b966c5b5cd33fe5e31e986dbe401e6a1
     }
 ]

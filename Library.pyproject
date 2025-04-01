@@ -1,6 +1,16 @@
 {
     "files": [
-        "widget.py",
-        "form.ui"
+        "main.py",
+        "form.ui",
+        "library_app.py",
+        "dialogs/student_dialog.py",
+        "dialogs/__init__.py",
+        "data/__init__.py",
+        "data/config_manager.py",
+        "data/books_manager.py",
+        "utils.py",
+        "dialogs/ambiguous_shift_dialog.py",
+        "data/students_manager.py",
+        "dialogs/book_dialog.py"
     ]
 }

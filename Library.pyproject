@@ -11,6 +11,7 @@
         "utils.py",
         "dialogs/ambiguous_shift_dialog.py",
         "data/students_manager.py",
-        "dialogs/book_dialog.py"
+        "dialogs/book_dialog.py",
+        "data/db.py"
     ]
 }

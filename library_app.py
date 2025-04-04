@@ -128,37 +128,19 @@ class LibraryApp(QWidget):
 
     def on_filters_changed(self):
         self.lazy_cancelled = True
-        self.start_lazy_loading_readers(reset_books=False)
+        self.start_lazy_loading_readers()
 
-    def start_lazy_loading_readers(self, reset_books=True):
+    def start_lazy_loading_readers(self):
         self.lazy_cancelled = False
         self.lazy_readers_data = self.get_filtered_students()
-        self.current_reader_index = 0
-        self.total_readers = len(self.lazy_readers_data)
         self.readers_table.setRowCount(0)
-        self.readers_loaded = False
+        for student in self.lazy_readers_data:
+            self.insert_student_in_table(self.readers_table.rowCount(), student)
         self.update_readers_status()
-        self.load_next_readers_chunk(reset_books=reset_books)
-
-    def load_next_readers_chunk(self, reset_books=True):
-        if self.lazy_cancelled:
-            return
-        CHUNK_SIZE = 50
-        end_index = min(self.current_reader_index + CHUNK_SIZE, self.total_readers)
-        for i in range(self.current_reader_index, end_index):
-            row = self.readers_table.rowCount()
-            self.insert_student_in_table(row, self.lazy_readers_data[i])
-        self.current_reader_index = end_index
-        self.update_readers_status()
-        if self.current_reader_index < self.total_readers and not self.lazy_cancelled:
-            QTimer.singleShot(60, lambda: self.load_next_readers_chunk(reset_books=reset_books))
-        else:
-            self.readers_loaded = True
-            if reset_books and (not self.books_loaded):
-                self.start_lazy_loading_books()
 
     def update_readers_status(self):
-        self.readers_status_label.setText(f"Читателей: {self.current_reader_index}/{self.total_readers}")
+        total = len(self.get_filtered_students())
+        self.readers_status_label.setText(f"Читателей: {self.readers_table.rowCount()}/{total}")
 
     def get_filtered_students(self):
         selected_class = self.class_filter.currentText()
@@ -176,34 +158,20 @@ class LibraryApp(QWidget):
                         fio_query in st.get("middle_name", "").lower()):
                     continue
             filtered.append(st)
-        sort_option = self.due_date_filter.currentText() if hasattr(self, 'due_date_filter') else "Все"
+        sort_option = self.due_date_filter.currentText()
         if sort_option == "Сдать раньше":
             def sort_key(student):
-                books = student.get("books", [])
-                dates = []
-                for b in books:
-                    if isinstance(b, dict):
-                        d = QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy")
-                        if d.isValid():
-                            dates.append(d)
-                if dates:
-                    return min(dates)
-                else:
-                    return QDate(9999, 12, 31)
+                dates = [QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy")
+                         for b in student.get("books", [])
+                         if isinstance(b, dict) and QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy").isValid()]
+                return min(dates) if dates else QDate(9999, 12, 31)
             filtered.sort(key=sort_key)
         elif sort_option == "Сдать позже":
             def sort_key(student):
-                books = student.get("books", [])
-                dates = []
-                for b in books:
-                    if isinstance(b, dict):
-                        d = QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy")
-                        if d.isValid():
-                            dates.append(d)
-                if dates:
-                    return max(dates)
-                else:
-                    return QDate(1900, 1, 1)
+                dates = [QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy")
+                         for b in student.get("books", [])
+                         if isinstance(b, dict) and QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy").isValid()]
+                return max(dates) if dates else QDate(1900, 1, 1)
             filtered.sort(key=sort_key, reverse=True)
         return filtered
 
@@ -218,12 +186,11 @@ class LibraryApp(QWidget):
         self.readers_table.setItem(row, 3, QTableWidgetItem(data["middle_name"]))
         self.readers_table.setItem(row, 4, QTableWidgetItem(data["class"]))
         self.readers_table.setItem(row, 5, QTableWidgetItem(data["parallel"]))
-        books_list = data.get("books", [])
         book_names = []
         due_dates = []
         overdue = False
         current_date = QDate.currentDate()
-        for b in books_list:
+        for b in data.get("books", []):
             if isinstance(b, dict):
                 book_names.append(b.get("book", ""))
                 due_date_str = b.get("due_date", "")
@@ -231,8 +198,6 @@ class LibraryApp(QWidget):
                 d = QDate.fromString(due_date_str, "dd.MM.yyyy")
                 if d.isValid() and d < current_date:
                     overdue = True
-            else:
-                book_names.append(b)
         self.readers_table.setItem(row, 6, QTableWidgetItem(", ".join(book_names)))
         self.readers_table.setItem(row, 7, QTableWidgetItem(", ".join(due_dates)))
         if overdue:
@@ -244,7 +209,6 @@ class LibraryApp(QWidget):
     def create_books_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-
         search_layout = QHBoxLayout()
         search_label = QLabel("Поиск:")
         self.book_search_edit = QLineEdit()
@@ -253,12 +217,10 @@ class LibraryApp(QWidget):
         search_layout.addWidget(search_label)
         search_layout.addWidget(self.book_search_edit)
         layout.addLayout(search_layout)
-
         self.books_table = QTableWidget(0, 3)
         self.books_table.setHorizontalHeaderLabels(["Название", "Автор", "Количество"])
         self.books_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.books_table)
-
         btn_layout = QHBoxLayout()
         add_book_btn = QPushButton("Добавить книгу")
         add_book_btn.clicked.connect(self.add_book)
@@ -267,54 +229,36 @@ class LibraryApp(QWidget):
         btn_layout.addWidget(add_book_btn)
         btn_layout.addWidget(del_book_btn)
         layout.addLayout(btn_layout)
-
         status_layout = QHBoxLayout()
         status_layout.addStretch()
         self.books_status_label = QLabel("Книг: 0/0")
         status_layout.addWidget(self.books_status_label)
         layout.addLayout(status_layout)
-
+        self.update_books_table()  # Обновляем таблицу при создании страницы
         return page
 
     def on_book_search_text_changed(self):
-        self.book_search_timer.start(300)
+        self.update_books_table()
+
+    def update_books_table(self):
+        query = self.book_search_edit.text().lower() if hasattr(self, 'book_search_edit') else ""
+        filtered = [bk for bk in self.books if (not query) or (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
+        self.books_table.setRowCount(0)
+        for bk in filtered:
+            row = self.books_table.rowCount()
+            self.books_table.insertRow(row)
+            self.books_table.setItem(row, 0, QTableWidgetItem(bk.get("Title", "")))
+            self.books_table.setItem(row, 1, QTableWidgetItem(bk.get("Author", "")))
+            quantity = bk.get("quantity")
+            self.books_table.setItem(row, 2, QTableWidgetItem(str(quantity) if quantity is not None else ""))
+        self.total_books = len(filtered)
+        self.update_books_status()
 
     def start_lazy_loading_books(self):
-        query = self.book_search_edit.text().lower() if hasattr(self, 'book_search_edit') else ""
-        self.lazy_books_data = []
-        for bk in self.books:
-            title = bk.get("Title", "")
-            author = bk.get("Author", "")
-            if query and (query not in title.lower() and query not in author.lower()):
-                continue
-            self.lazy_books_data.append(bk)
-        self.current_book_index = 0
-        self.total_books = len(self.lazy_books_data)
-        self.books_table.setRowCount(0)
-        self.books_loaded = False
-        self.update_books_status()
-        self.load_next_books_chunk()
-
-    def load_next_books_chunk(self):
-        CHUNK_SIZE = 50
-        end_index = min(self.current_book_index + CHUNK_SIZE, self.total_books)
-        for i in range(self.current_book_index, end_index):
-            row = self.books_table.rowCount()
-            book = self.lazy_books_data[i]
-            self.books_table.insertRow(row)
-            self.books_table.setItem(row, 0, QTableWidgetItem(book.get("Title", "")))
-            self.books_table.setItem(row, 1, QTableWidgetItem(book.get("Author", "")))
-            quantity = book.get("quantity")
-            self.books_table.setItem(row, 2, QTableWidgetItem(str(quantity) if quantity is not None else ""))
-        self.current_book_index = end_index
-        self.update_books_status()
-        if self.current_book_index < self.total_books:
-            QTimer.singleShot(60, self.load_next_books_chunk)
-        else:
-            self.books_loaded = True
+        self.update_books_table()
 
     def update_books_status(self):
-        self.books_status_label.setText(f"Книг: {self.current_book_index}/{self.total_books}")
+        self.books_status_label.setText(f"Книг: {self.total_books}/{len(self.books)}")
 
     def add_book(self):
         dlg = BookDialog(self)
@@ -323,7 +267,9 @@ class LibraryApp(QWidget):
             if data["Title"] and data["Author"]:
                 self.books.append(data)
                 save_books(self.books)
-                self.start_lazy_loading_books()
+                # После сохранения обновляем локальный список из БД
+                self.books = load_books()
+                self.update_books_table()
             else:
                 QMessageBox.warning(self, "Ошибка", "Поля «Название» и «Автор» должны быть заполнены!")
 
@@ -334,18 +280,19 @@ class LibraryApp(QWidget):
             return
         row = selected[0].row()
         query = self.book_search_edit.text().lower()
-        filtered = [b for b in self.books if (not query) or (query in b.get("Title", "").lower() or query in b.get("Author", "").lower())]
+        filtered = [bk for bk in self.books if (not query) or (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
         if row < len(filtered):
             book_to_delete = filtered[row]
             self.books.remove(book_to_delete)
             save_books(self.books)
-            self.start_lazy_loading_books()
+            # Обновляем локальный список из БД
+            self.books = load_books()
+            self.update_books_table()
 
     def create_config_page(self):
         page = QWidget()
         outer_layout = QVBoxLayout(page)
         main_layout = QHBoxLayout()
-
         classes_group = QGroupBox("Классы")
         classes_layout = QVBoxLayout(classes_group)
         self.classes_list_widget = QListWidget()
@@ -436,6 +383,16 @@ class LibraryApp(QWidget):
         self.parallel_filter.addItems(parallels)
         QMessageBox.information(self, "Сохранено", "Настройки сохранены.")
 
+    def count_issued(self, book_str, exclude_student=None):
+        count = 0
+        for st in self.students:
+            if exclude_student is not None and st is exclude_student:
+                continue
+            for b in st.get("books", []):
+                if isinstance(b, dict) and b.get("book", "") == book_str:
+                    count += 1
+        return count
+
     def add_student(self):
         dlg = StudentDialog(
             self,
@@ -454,7 +411,11 @@ class LibraryApp(QWidget):
                 return
             self.students.append(data)
             save_students(self.students)
-            self.start_lazy_loading_readers(reset_books=False)
+            if self.filter_student(data):
+                pos = self.compute_sorted_position(data)
+                self.insert_student_in_table(pos, data)
+                self.total_readers = len(self.get_filtered_students())
+                self.update_readers_status()
 
     def edit_student(self, index):
         row = index.row()
@@ -474,7 +435,9 @@ class LibraryApp(QWidget):
         if res == 2:
             del self.students[full_index]
             save_students(self.students)
-            self.start_lazy_loading_readers(reset_books=False)
+            self.readers_table.removeRow(row)
+            self.total_readers = len(self.get_filtered_students())
+            self.update_readers_status()
         elif res == QDialog.DialogCode.Accepted:
             new_data = dlg.get_data()
             if not self.validate_student_data(new_data):
@@ -485,7 +448,7 @@ class LibraryApp(QWidget):
                 return
             self.students[full_index] = new_data
             save_students(self.students)
-            self.start_lazy_loading_readers(reset_books=False)
+            self.set_student_row(row, new_data)
 
     def validate_student_data(self, data):
         if (not self.is_valid_name(data["last_name"]) or
@@ -500,6 +463,43 @@ class LibraryApp(QWidget):
 
     def get_books_display_list(self):
         return [f'{b.get("Title", "")} - {b.get("Author", "")}' for b in self.books]
+
+    def compute_sorted_position(self, new_student):
+        filtered = self.get_filtered_students()
+        sort_option = self.due_date_filter.currentText()
+        if sort_option == "Все":
+            return len(filtered)
+        new_date = None
+        dates = []
+        for b in new_student.get("books", []):
+            if isinstance(b, dict):
+                d = QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy")
+                if d.isValid():
+                    dates.append(d)
+        if dates:
+            new_date = min(dates) if sort_option == "Сдать раньше" else max(dates)
+        else:
+            new_date = QDate(9999, 12, 31) if sort_option == "Сдать раньше" else QDate(1900, 1, 1)
+        pos = 0
+        for student in filtered:
+            dates = []
+            for b in student.get("books", []):
+                if isinstance(b, dict):
+                    d = QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy")
+                    if d.isValid():
+                        dates.append(d)
+            if dates:
+                current_date = min(dates) if sort_option == "Сдать раньше" else max(dates)
+            else:
+                current_date = QDate(9999, 12, 31) if sort_option == "Сдать раньше" else QDate(1900, 1, 1)
+            if sort_option == "Сдать раньше":
+                if new_date < current_date:
+                    break
+            else:
+                if new_date > current_date:
+                    break
+            pos += 1
+        return pos
 
     def shift_students(self):
         last_class = max(self.config.get("classes", []), key=lambda x: int(x))
@@ -517,7 +517,7 @@ class LibraryApp(QWidget):
             if dlg.exec() == QDialog.DialogCode.Accepted:
                 self.students = [st for st in self.students if not st.get("to_delete", False)]
         save_students(self.students)
-        self.start_lazy_loading_readers(reset_books=False)
+        self.start_lazy_loading_readers()
 
 if __name__ == "__main__":
     from PyQt6.QtWidgets import QApplication

@@ -78,6 +78,7 @@ class LibraryApp(QWidget):
     def create_readers_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
+        # Верхняя панель поиска
         search_layout = QHBoxLayout()
         search_layout.addWidget(QLabel("Поиск по ФИО:"))
         self.fio_search = QLineEdit()
@@ -86,6 +87,7 @@ class LibraryApp(QWidget):
         search_layout.addWidget(self.fio_search)
         layout.addLayout(search_layout)
 
+        # Панель фильтров
         filters_layout = QHBoxLayout()
         filters_layout.addWidget(QLabel("Класс:"))
         self.class_filter = QComboBox()
@@ -106,10 +108,17 @@ class LibraryApp(QWidget):
         self.due_date_filter.currentTextChanged.connect(lambda: self.on_filters_changed())
         layout.addLayout(filters_layout)
 
+        # Панель кнопок
+        button_layout = QHBoxLayout()
         add_student_btn = QPushButton("Добавить ученика")
         add_student_btn.clicked.connect(self.add_student)
-        layout.addWidget(add_student_btn)
+        button_layout.addWidget(add_student_btn)
+        clear_all_btn = QPushButton("Очистить всех")
+        clear_all_btn.clicked.connect(self.clear_all_students)
+        button_layout.addWidget(clear_all_btn)
+        layout.addLayout(button_layout)
 
+        # Таблица учеников
         self.readers_table = QTableWidget(0, 8)
         self.readers_table.setHorizontalHeaderLabels(
             ["Id", "Фамилия", "Имя", "Отчество", "Класс", "Параллель", "Книги", "Срок сдачи"]
@@ -125,6 +134,21 @@ class LibraryApp(QWidget):
         layout.addLayout(status_layout)
 
         return page
+
+    def clear_all_students(self):
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Подтверждение")
+        msg_box.setText("Вы действительно хотите очистить всех учеников?")
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        yes_button = msg_box.button(QMessageBox.StandardButton.Yes)
+        no_button = msg_box.button(QMessageBox.StandardButton.No)
+        yes_button.setText("Да")
+        no_button.setText("Нет")
+        ret = msg_box.exec()
+        if ret == QMessageBox.StandardButton.Yes.value:
+            self.students = []
+            save_students(self.students)
+            self.start_lazy_loading_readers()
 
     def on_filters_changed(self):
         self.lazy_cancelled = True
@@ -267,7 +291,6 @@ class LibraryApp(QWidget):
             if data["Title"] and data["Author"]:
                 self.books.append(data)
                 save_books(self.books)
-                # После сохранения обновляем локальный список из БД
                 self.books = load_books()
                 self.update_books_table()
             else:
@@ -285,7 +308,6 @@ class LibraryApp(QWidget):
             book_to_delete = filtered[row]
             self.books.remove(book_to_delete)
             save_books(self.books)
-            # Обновляем локальный список из БД
             self.books = load_books()
             self.update_books_table()
 

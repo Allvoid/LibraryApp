@@ -56,3 +56,5 @@ python3 main.py
 	•	Работа с базой данных: Папка data (файлы db.py, config_manager.py, books_manager.py, students_manager.py)
 	•	Утилиты: Файл utils.py
 
+Лицензия: Apache License 2.0. См. файл LICENSE для подробностей.
+

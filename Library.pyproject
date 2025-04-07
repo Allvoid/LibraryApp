@@ -12,6 +12,12 @@
         "dialogs/ambiguous_shift_dialog.py",
         "data/students_manager.py",
         "dialogs/book_dialog.py",
-        "data/db.py"
+        "data/db.py",
+        "models/books_table_model.py",
+        "pages/readers_page.py",
+        "pages/books_page.py",
+        "pages/config_page.py",
+        "models/__init__.py",
+        "pages/__init__.py"
     ]
 }

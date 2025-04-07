@@ -1,107 +1,34 @@
 import sys
 import re
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QComboBox, QDialog,
-    QMessageBox, QLineEdit, QStackedWidget, QTableWidget, QTableWidgetItem, QListWidget,
-    QGroupBox, QHeaderView, QTableView
-)
-from PyQt6.QtCore import Qt, QTimer, QDate, QAbstractTableModel
-from PyQt6.QtGui import QColor
-
-# Импорт диалогов
-from dialogs.student_dialog import StudentDialog
-from dialogs.book_dialog import BookDialog
-from dialogs.ambiguous_shift_dialog import AmbiguousShiftDialog
-
-# Импорт менеджеров данных
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QStackedWidget, QMessageBox
 from data.config_manager import load_config, save_config
+from pages.readers_page import ReadersPage
+from pages.books_page import BooksPage
+import PyQt6.QtWidgets as QtWidgets
+from pages.config_page import ConfigPage
+from data.config_manager import load_config
 from data.books_manager import load_books, save_books
+from PyQt6.QtWidgets import QDialog
 from data.students_manager import load_students, save_students
-
-# Импорт утилит
 from utils import is_valid_name, check_issued_limits
-
-class BooksTableModel(QAbstractTableModel):
-    def __init__(self, books=None):
-        super().__init__()
-        self._books = books or []
-        self._headers = ["Название", "Автор", "Количество"]
-
-    def rowCount(self, parent=None):
-        return len(self._books)
-
-    def columnCount(self, parent=None):
-        return len(self._headers)
-
-    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
-        if not index.isValid():
-            return None
-        if role == Qt.ItemDataRole.DisplayRole:
-            book = self._books[index.row()]
-            if index.column() == 0:
-                return book.get("Title", "")
-            elif index.column() == 1:
-                return book.get("Author", "")
-            elif index.column() == 2:
-                quantity = book.get("quantity")
-                return str(quantity) if quantity is not None else ""
-        return None
-
-    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
-        """Переопределяем метод, чтобы:
-           - Горизонтальные заголовки брались из self._headers
-           - Вертикальные заголовки показывали номера строк (section+1)
-        """
-        if role == Qt.ItemDataRole.DisplayRole:
-            # Для вертикального заголовка (номера строк)
-            if orientation == Qt.Orientation.Vertical:
-                return str(section + 1)
-            # Для горизонтального заголовка (названия столбцов)
-            elif orientation == Qt.Orientation.Horizontal:
-                return self._headers[section]
-        return None
-
-    def updateBooks(self, books):
-        self.beginResetModel()
-        self._books = books
-        self.endResetModel()
-
 
 class LibraryApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Школьная библиотека")
         self.setGeometry(100, 100, 900, 600)
-        try:
-            self.config = load_config()
-            self.books = load_books()
-            self.students = load_students()
-        except Exception as e:
-            print("Ошибка загрузки данных:", e)
-            self.config = {}
-            self.books = []
-            self.students = []
-
-        self.readers_loaded = False
-        self.books_loaded = False
-        self.lazy_cancelled = False
-
-        self.lazy_readers_data = []
-        self.current_reader_index = 0
-        self.total_readers = 0
-
-        self.book_search_timer = QTimer(self)
-        self.book_search_timer.setSingleShot(True)
-        self.book_search_timer.timeout.connect(self.start_lazy_loading_books)
-
+        # Загружаем данные
+        self.config = load_config()
+        self.books = load_books()
+        self.students = load_students()
         self._init_ui()
-        self.start_lazy_loading_readers()
 
     def _init_ui(self):
         main_layout = QHBoxLayout(self)
         self.menu_buttons = []
         menu_layout = QVBoxLayout()
-        for name, index in [("Читатели", 0), ("Книги", 1), ("Классы и параллели", 2)]:
+        button_names = [("Читатели", 0), ("Книги", 1), ("Классы и параллели", 2)]
+        for name, index in button_names:
             btn = QPushButton(name)
             btn.setFixedSize(150, 40)
             btn.clicked.connect(lambda _, i=index: self.switch_page(i))
@@ -111,9 +38,13 @@ class LibraryApp(QWidget):
         main_layout.addLayout(menu_layout)
 
         self.pages = QStackedWidget()
-        self.pages.addWidget(self.create_readers_page())
-        self.pages.addWidget(self.create_books_page())
-        self.pages.addWidget(self.create_config_page())
+        # Передаём self в качестве родителя страниц
+        self.readers_page = ReadersPage(self)
+        self.books_page = BooksPage(self)
+        self.config_page = ConfigPage(self)
+        self.pages.addWidget(self.readers_page)
+        self.pages.addWidget(self.books_page)
+        self.pages.addWidget(self.config_page)
         main_layout.addWidget(self.pages)
         self.switch_page(0)
 
@@ -122,379 +53,14 @@ class LibraryApp(QWidget):
         for i, btn in enumerate(self.menu_buttons):
             btn.setStyleSheet("background-color: lightblue; font-weight: bold;" if i == index else "")
 
-    def create_readers_page(self):
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        # Панель поиска
-        search_layout = QHBoxLayout()
-        search_layout.addWidget(QLabel("Поиск по ФИО:"))
-        self.fio_search = QLineEdit()
-        self.fio_search.setPlaceholderText("Введите ФИО...")
-        self.fio_search.textChanged.connect(lambda: self.on_filters_changed())
-        search_layout.addWidget(self.fio_search)
-        layout.addLayout(search_layout)
-
-        # Панель фильтров
-        filters_layout = QHBoxLayout()
-        filters_layout.addWidget(QLabel("Класс:"))
-        self.class_filter = QComboBox()
-        self.class_filter.addItem("Все")
-        self.class_filter.addItems(self.config.get("classes", []))
-        filters_layout.addWidget(self.class_filter)
-        filters_layout.addWidget(QLabel("Параллель:"))
-        self.parallel_filter = QComboBox()
-        self.parallel_filter.addItem("Все")
-        self.parallel_filter.addItems(self.config.get("parallels", []))
-        filters_layout.addWidget(self.parallel_filter)
-        filters_layout.addWidget(QLabel("Сортировать по дате сдачи:"))
-        self.due_date_filter = QComboBox()
-        self.due_date_filter.addItems(["Все", "Сдать раньше", "Сдать позже"])
-        filters_layout.addWidget(self.due_date_filter)
-        self.class_filter.currentTextChanged.connect(lambda: self.on_filters_changed())
-        self.parallel_filter.currentTextChanged.connect(lambda: self.on_filters_changed())
-        self.due_date_filter.currentTextChanged.connect(lambda: self.on_filters_changed())
-        layout.addLayout(filters_layout)
-
-        # Панель кнопок
-        button_layout = QHBoxLayout()
-        add_student_btn = QPushButton("Добавить ученика")
-        add_student_btn.clicked.connect(self.add_student)
-        button_layout.addWidget(add_student_btn)
-        clear_all_btn = QPushButton("Очистить всех")
-        clear_all_btn.clicked.connect(self.clear_all_students)
-        button_layout.addWidget(clear_all_btn)
-        layout.addLayout(button_layout)
-
-        # Таблица читателей (7 столбцов: без колонки ID)
-        self.readers_table = QTableWidget(0, 7)
-        self.readers_table.setHorizontalHeaderLabels(
-            ["Фамилия", "Имя", "Отчество", "Класс", "Параллель", "Книги", "Срок сдачи"]
-        )
-        self.readers_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.readers_table.doubleClicked.connect(self.edit_student)
-        layout.addWidget(self.readers_table)
-
-        status_layout = QHBoxLayout()
-        status_layout.addStretch()
-        self.readers_status_label = QLabel("Читателей: 0/0")
-        status_layout.addWidget(self.readers_status_label)
-        layout.addLayout(status_layout)
-
-        return page
-
-    def clear_all_students(self):
-        msg_box = QMessageBox(self)
-        msg_box.setWindowTitle("Подтверждение")
-        msg_box.setText("Вы действительно хотите очистить всех учеников?")
-        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        yes_button = msg_box.button(QMessageBox.StandardButton.Yes)
-        no_button = msg_box.button(QMessageBox.StandardButton.No)
-        yes_button.setText("Да")
-        no_button.setText("Нет")
-        ret = msg_box.exec()
-        if ret == QMessageBox.StandardButton.Yes.value:
-            self.students = []
-            save_students(self.students)
-            self.start_lazy_loading_readers()
-
-    def on_filters_changed(self):
-        self.lazy_cancelled = True
-        self.start_lazy_loading_readers()
-
-    def start_lazy_loading_readers(self):
-        self.lazy_cancelled = False
-        self.lazy_readers_data = self.get_filtered_students()
-        self.readers_table.setRowCount(0)
-        for student in self.lazy_readers_data:
-            self.insert_student_in_table(self.readers_table.rowCount(), student)
-        self.update_readers_status()
-
-    def update_readers_status(self):
-        total = len(self.get_filtered_students())
-        self.readers_status_label.setText(f"Читателей: {self.readers_table.rowCount()}/{total}")
-
-    def get_filtered_students(self):
-        selected_class = self.class_filter.currentText()
-        selected_parallel = self.parallel_filter.currentText()
-        fio_query = self.fio_search.text().lower()
-        filtered = []
-        for st in self.students:
-            if selected_class != "Все" and st.get("class", "") != selected_class:
-                continue
-            if selected_parallel != "Все" and st.get("parallel", "") != selected_parallel:
-                continue
-            if fio_query:
-                if not (fio_query in st.get("last_name", "").lower() or
-                        fio_query in st.get("first_name", "").lower() or
-                        fio_query in st.get("middle_name", "").lower()):
-                    continue
-            filtered.append(st)
-        sort_option = self.due_date_filter.currentText()
-        if sort_option == "Сдать раньше":
-            def sort_key(student):
-                dates = [QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy")
-                         for b in student.get("books", [])
-                         if isinstance(b, dict) and QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy").isValid()]
-                return min(dates) if dates else QDate(9999, 12, 31)
-            filtered.sort(key=sort_key)
-        elif sort_option == "Сдать позже":
-            def sort_key(student):
-                dates = [QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy")
-                         for b in student.get("books", [])
-                         if isinstance(b, dict) and QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy").isValid()]
-                return max(dates) if dates else QDate(1900, 1, 1)
-            filtered.sort(key=sort_key, reverse=True)
-        return filtered
-
-    def insert_student_in_table(self, row, data):
-        self.readers_table.insertRow(row)
-        self.set_student_row(row, data)
-
-    def set_student_row(self, row, data):
-        self.readers_table.setItem(row, 0, QTableWidgetItem(data["last_name"]))
-        self.readers_table.setItem(row, 1, QTableWidgetItem(data["first_name"]))
-        self.readers_table.setItem(row, 2, QTableWidgetItem(data["middle_name"]))
-        self.readers_table.setItem(row, 3, QTableWidgetItem(data["class"]))
-        self.readers_table.setItem(row, 4, QTableWidgetItem(data["parallel"]))
-        book_names = []
-        due_dates = []
-        overdue = False
-        current_date = QDate.currentDate()
-        for b in data.get("books", []):
-            if isinstance(b, dict):
-                book_names.append(b.get("book", ""))
-                due_date_str = b.get("due_date", "")
-                due_dates.append(due_date_str)
-                d = QDate.fromString(due_date_str, "dd.MM.yyyy")
-                if d.isValid() and d < current_date:
-                    overdue = True
-        self.readers_table.setItem(row, 5, QTableWidgetItem(", ".join(book_names)))
-        self.readers_table.setItem(row, 6, QTableWidgetItem(", ".join(due_dates)))
-        if overdue:
-            for col in range(self.readers_table.columnCount()):
-                item = self.readers_table.item(row, col)
-                if item:
-                    item.setBackground(QColor("red"))
-
-    def create_books_page(self):
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        # Панель поиска
-        search_layout = QHBoxLayout()
-        search_label = QLabel("Поиск:")
-        self.book_search_edit = QLineEdit()
-        self.book_search_edit.setPlaceholderText("Искать по названию или автору...")
-        self.book_search_edit.textChanged.connect(self.on_book_search_text_changed)
-        search_layout.addWidget(search_label)
-        search_layout.addWidget(self.book_search_edit)
-        layout.addLayout(search_layout)
-        # Используем QTableView с моделью для книг
-        self.books_table_view = QTableView()
-        self.books_model = BooksTableModel(self.books)
-        self.books_table_view.setModel(self.books_model)
-        self.books_table_view.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        # Убеждаемся, что вертикальный заголовок (номера строк) виден
-        self.books_table_view.verticalHeader().setVisible(True)
-        layout.addWidget(self.books_table_view)
-        # Панель кнопок
-        btn_layout = QHBoxLayout()
-        add_book_btn = QPushButton("Добавить книгу")
-        add_book_btn.clicked.connect(self.add_book)
-        del_book_btn = QPushButton("Удалить книгу")
-        del_book_btn.clicked.connect(self.delete_book)
-        clear_books_btn = QPushButton("Очистить все книги")
-        clear_books_btn.clicked.connect(self.clear_all_books)
-        btn_layout.addWidget(add_book_btn)
-        btn_layout.addWidget(del_book_btn)
-        btn_layout.addWidget(clear_books_btn)
-        layout.addLayout(btn_layout)
-        # Статус
-        status_layout = QHBoxLayout()
-        status_layout.addStretch()
-        self.books_status_label = QLabel("Книг: 0/0")
-        status_layout.addWidget(self.books_status_label)
-        layout.addLayout(status_layout)
-        self.update_books_table()
-        return page
-
-    def on_book_search_text_changed(self):
-        self.update_books_table()
-
-    def update_books_table(self):
-        query = self.book_search_edit.text().lower() if hasattr(self, 'book_search_edit') else ""
-        filtered = [bk for bk in self.books if (not query) or (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
-        self.books_model.updateBooks(filtered)
-        self.total_books = len(filtered)
-        self.update_books_status()
-
-    def start_lazy_loading_books(self):
-        self.update_books_table()
-
-    def update_books_status(self):
-        self.books_status_label.setText(f"Книг: {self.total_books}/{len(self.books)}")
-
-    def add_book(self):
-        try:
-            dlg = BookDialog(self)
-            if dlg.exec() == QDialog.DialogCode.Accepted:
-                data = dlg.get_data()
-                if data["Title"] and data["Author"]:
-                    self.books.append(data)
-                    save_books(self.books)
-                    self.books = load_books()
-                    self.update_books_table()
-                else:
-                    QMessageBox.warning(self, "Ошибка", "Поля «Название» и «Автор» должны быть заполнены!")
-        except Exception as e:
-            print("Ошибка при добавлении книги:", e)
-
-    def delete_book(self):
-        try:
-            selected_indexes = self.books_table_view.selectionModel().selectedRows()
-            if not selected_indexes:
-                QMessageBox.warning(self, "Ошибка", "Выберите книгу для удаления!")
-                return
-            row = selected_indexes[0].row()
-            query = self.book_search_edit.text().lower()
-            filtered = [bk for bk in self.books if (not query) or (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
-            if row < len(filtered):
-                book_to_delete = filtered[row]
-                self.books.remove(book_to_delete)
-                save_books(self.books)
-                self.books = load_books()
-                self.update_books_table()
-        except Exception as e:
-            print("Ошибка при удалении книги:", e)
-
-    def clear_all_books(self):
-        msg_box = QMessageBox(self)
-        msg_box.setWindowTitle("Подтверждение")
-        msg_box.setText("Вы действительно хотите удалить все книги?")
-        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        yes_button = msg_box.button(QMessageBox.StandardButton.Yes)
-        no_button = msg_box.button(QMessageBox.StandardButton.No)
-        yes_button.setText("Да")
-        no_button.setText("Нет")
-        ret = msg_box.exec()
-        if ret == QMessageBox.StandardButton.Yes.value:
-            self.books = []
-            save_books(self.books)
-            self.books = load_books()
-            self.update_books_table()
-
-    def create_config_page(self):
-        page = QWidget()
-        outer_layout = QVBoxLayout(page)
-        main_layout = QHBoxLayout()
-
-        classes_group = QGroupBox("Классы")
-        classes_layout = QVBoxLayout(classes_group)
-        self.classes_list_widget = QListWidget()
-        self.classes_list_widget.addItems(self.config.get("classes", []))
-        classes_layout.addWidget(self.classes_list_widget)
-        add_class_layout = QHBoxLayout()
-        self.new_class_edit = QLineEdit()
-        self.new_class_edit.setPlaceholderText("Новый класс")
-        add_class_btn = QPushButton("Добавить")
-        add_class_btn.clicked.connect(self.add_class)
-        add_class_layout.addWidget(self.new_class_edit)
-        add_class_layout.addWidget(add_class_btn)
-        classes_layout.addLayout(add_class_layout)
-        del_class_btn = QPushButton("Удалить выбранное")
-        del_class_btn.clicked.connect(self.delete_class)
-        classes_layout.addWidget(del_class_btn)
-        classes_layout.addStretch()
-
-        parallels_group = QGroupBox("Параллели")
-        parallels_layout = QVBoxLayout(parallels_group)
-        self.parallels_list_widget = QListWidget()
-        self.parallels_list_widget.addItems(self.config.get("parallels", []))
-        parallels_layout.addWidget(self.parallels_list_widget)
-        add_parallel_layout = QHBoxLayout()
-        self.new_parallel_edit = QLineEdit()
-        self.new_parallel_edit.setPlaceholderText("Новая параллель")
-        add_parallel_btn = QPushButton("Добавить")
-        add_parallel_btn.clicked.connect(self.add_parallel)
-        add_parallel_layout.addWidget(self.new_parallel_edit)
-        add_parallel_layout.addWidget(add_parallel_btn)
-        parallels_layout.addLayout(add_parallel_layout)
-        del_parallel_btn = QPushButton("Удалить выбранное")
-        del_parallel_btn.clicked.connect(self.delete_parallel)
-        parallels_layout.addWidget(del_parallel_btn)
-        parallels_layout.addStretch()
-
-        main_layout.addWidget(classes_group)
-        main_layout.addWidget(parallels_group)
-        outer_layout.addLayout(main_layout)
-
-        bottom_layout = QHBoxLayout()
-        bottom_layout.addStretch()
-        shift_btn = QPushButton("Сдвинуть учеников на следующий класс")
-        shift_btn.clicked.connect(self.shift_students)
-        bottom_layout.addWidget(shift_btn)
-        save_btn = QPushButton("Сохранить изменения")
-        save_btn.clicked.connect(self.save_config_changes)
-        bottom_layout.addWidget(save_btn)
-        bottom_layout.addStretch()
-        outer_layout.addLayout(bottom_layout)
-
-        return page
-
-    def add_class(self):
-        text = self.new_class_edit.text().strip()
-        if text and text not in [self.classes_list_widget.item(i).text() for i in range(self.classes_list_widget.count())]:
-            self.classes_list_widget.addItem(text)
-            self.new_class_edit.clear()
-
-    def delete_class(self):
-        for item in self.classes_list_widget.selectedItems():
-            self.classes_list_widget.takeItem(self.classes_list_widget.row(item))
-
-    def add_parallel(self):
-        text = self.new_parallel_edit.text().strip()
-        if text and text not in [self.parallels_list_widget.item(i).text() for i in range(self.parallels_list_widget.count())]:
-            self.parallels_list_widget.addItem(text)
-            self.new_parallel_edit.clear()
-
-    def delete_parallel(self):
-        for item in self.parallels_list_widget.selectedItems():
-            self.parallels_list_widget.takeItem(self.parallels_list_widget.row(item))
-
-    def save_config_changes(self):
-        classes = [self.classes_list_widget.item(i).text().strip() for i in range(self.classes_list_widget.count())]
-        parallels = [self.parallels_list_widget.item(i).text().strip() for i in range(self.parallels_list_widget.count())]
-        if not classes or not parallels:
-            QMessageBox.warning(self, "Ошибка", "Списки не могут быть пустыми!")
-            return
-        self.config["classes"] = classes
-        self.config["parallels"] = parallels
-        save_config(self.config)
-        self.class_filter.clear()
-        self.class_filter.addItem("Все")
-        self.class_filter.addItems(classes)
-        self.parallel_filter.clear()
-        self.parallel_filter.addItem("Все")
-        self.parallel_filter.addItems(parallels)
-        QMessageBox.information(self, "Сохранено", "Настройки сохранены.")
-
-    def count_issued(self, book_str, exclude_student=None):
-        count = 0
-        for st in self.students:
-            if exclude_student is not None and st is exclude_student:
-                continue
-            for b in st.get("books", []):
-                if isinstance(b, dict) and b.get("book", "") == book_str:
-                    count += 1
-        return count
-
+    # Методы, вызываемые страницами.
+    # Здесь возвращаем полную функциональность, перенесённую из исходной версии.
     def add_student(self):
-        dlg = StudentDialog(
-            self,
-            student_data=None,
-            books_list=self.get_books_display_list(),
-            classes_list=self.config.get("classes", []),
-            parallels_list=self.config.get("parallels", [])
-        )
+        from dialogs.student_dialog import StudentDialog
+        dlg = StudentDialog(self, student_data=None,
+                            books_list=self.get_books_display_list(),
+                            classes_list=self.config.get("classes", []),
+                            parallels_list=self.config.get("parallels", []))
         if dlg.exec() == QDialog.DialogCode.Accepted:
             data = dlg.get_data()
             if not self.validate_student_data(data):
@@ -505,33 +71,25 @@ class LibraryApp(QWidget):
                 return
             self.students.append(data)
             save_students(self.students)
-            if self.filter_student(data):
-                pos = self.compute_sorted_position(data)
-                self.insert_student_in_table(pos, data)
-                self.total_readers = len(self.get_filtered_students())
-                self.update_readers_status()
+            self.readers_page.refresh()
 
     def edit_student(self, index):
+        # index – объект QModelIndex, полученный при двойном клике по таблице
+        filtered = self.readers_page.get_filtered_students()
         row = index.row()
-        filtered = self.get_filtered_students()
         if row >= len(filtered):
             return
         student = filtered[row]
-        full_index = self.students.index(student)
-        dlg = StudentDialog(
-            self,
-            student_data=student,
-            books_list=self.get_books_display_list(),
-            classes_list=self.config.get("classes", []),
-            parallels_list=self.config.get("parallels", [])
-        )
+        from dialogs.student_dialog import StudentDialog
+        dlg = StudentDialog(self, student_data=student,
+                            books_list=self.get_books_display_list(),
+                            classes_list=self.config.get("classes", []),
+                            parallels_list=self.config.get("parallels", []))
         res = dlg.exec()
         if res == 2:
-            del self.students[full_index]
+            self.students.remove(student)
             save_students(self.students)
-            self.readers_table.removeRow(row)
-            self.total_readers = len(self.get_filtered_students())
-            self.update_readers_status()
+            self.readers_page.refresh()
         elif res == QDialog.DialogCode.Accepted:
             new_data = dlg.get_data()
             if not self.validate_student_data(new_data):
@@ -540,60 +98,57 @@ class LibraryApp(QWidget):
             if not valid:
                 QMessageBox.warning(self, "Ошибка", msg)
                 return
-            self.students[full_index] = new_data
+            idx = self.students.index(student)
+            self.students[idx] = new_data
             save_students(self.students)
-            self.set_student_row(row, new_data)
+            self.readers_page.refresh()
 
-    def validate_student_data(self, data):
-        if (not self.is_valid_name(data["last_name"]) or
-            not self.is_valid_name(data["first_name"]) or
-            not self.is_valid_name(data["middle_name"])):
-            QMessageBox.warning(self, "Ошибка ввода", "Фамилия, Имя и Отчество должны содержать только буквы!")
-            return False
-        return True
+    def clear_all_students(self):
+        reply = QMessageBox.question(self, "Подтверждение",
+                                     "Вы действительно хотите очистить всех учеников?",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            self.students = []
+            save_students(self.students)
+            self.readers_page.refresh()
 
-    def is_valid_name(self, text):
-        return is_valid_name(text)
-
-    def get_books_display_list(self):
-        return [f'{b.get("Title", "")} - {b.get("Author", "")}' for b in self.books]
-
-    def compute_sorted_position(self, new_student):
-        filtered = self.get_filtered_students()
-        sort_option = self.due_date_filter.currentText()
-        if sort_option == "Все":
-            return len(filtered)
-        new_date = None
-        dates = []
-        for b in new_student.get("books", []):
-            if isinstance(b, dict):
-                d = QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy")
-                if d.isValid():
-                    dates.append(d)
-        if dates:
-            new_date = min(dates) if sort_option == "Сдать раньше" else max(dates)
-        else:
-            new_date = QDate(9999, 12, 31) if sort_option == "Сдать раньше" else QDate(1900, 1, 1)
-        pos = 0
-        for student in filtered:
-            dates = []
-            for b in student.get("books", []):
-                if isinstance(b, dict):
-                    d = QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy")
-                    if d.isValid():
-                        dates.append(d)
-            if dates:
-                current_date = min(dates) if sort_option == "Сдать раньше" else max(dates)
+    def add_book(self):
+        from dialogs.book_dialog import BookDialog
+        dlg = BookDialog(self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            data = dlg.get_data()
+            if data["Title"] and data["Author"]:
+                self.books.append(data)
+                save_books(self.books)
+                self.books = load_books()
+                self.update_books_table()
             else:
-                current_date = QDate(9999, 12, 31) if sort_option == "Сдать раньше" else QDate(1900, 1, 1)
-            if sort_option == "Сдать раньше":
-                if new_date < current_date:
-                    break
-            else:
-                if new_date > current_date:
-                    break
-            pos += 1
-        return pos
+                QMessageBox.warning(self, "Ошибка", "Поля «Название» и «Автор» должны быть заполнены!")
+
+    def delete_book(self):
+        indexes = self.books_page.books_table_view.selectionModel().selectedRows()
+        if not indexes:
+            QMessageBox.warning(self, "Ошибка", "Выберите книгу для удаления!")
+            return
+        row = indexes[0].row()
+        query = self.books_page.book_search_edit.text().lower()
+        filtered = [bk for bk in self.books if (not query) or (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
+        if row < len(filtered):
+            book_to_delete = filtered[row]
+            self.books.remove(book_to_delete)
+            save_books(self.books)
+            self.books = load_books()
+            self.update_books_table()
+
+    def clear_all_books(self):
+        reply = QMessageBox.question(self, "Подтверждение",
+                                     "Вы действительно хотите удалить все книги?",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            self.books = []
+            save_books(self.books)
+            self.books = load_books()
+            self.update_books_table()
 
     def shift_students(self):
         last_class = max(self.config.get("classes", []), key=lambda x: int(x))
@@ -607,11 +162,71 @@ class LibraryApp(QWidget):
             else:
                 ambiguous_students.append(st)
         if ambiguous_students:
+            from dialogs.ambiguous_shift_dialog import AmbiguousShiftDialog
             dlg = AmbiguousShiftDialog(ambiguous_students, last_class, parent=self)
             if dlg.exec() == QDialog.DialogCode.Accepted:
                 self.students = [st for st in self.students if not st.get("to_delete", False)]
         save_students(self.students)
-        self.start_lazy_loading_readers()
+        self.readers_page.refresh()
+
+    def add_class(self):
+        from PyQt6.QtWidgets import QInputDialog
+        new_class, ok = QInputDialog.getText(self, "Добавить класс", "Введите новый класс:")
+        if ok and new_class:
+            if new_class not in self.config.get("classes", []):
+                self.config["classes"].append(new_class)
+                save_config(self.config)
+                self.config_page.refresh()
+                self.readers_page.refresh()
+
+    def delete_class(self):
+        selected = self.config_page.classes_list_widget.selectedItems()
+        if selected:
+            for item in selected:
+                cls = item.text()
+                if cls in self.config.get("classes", []):
+                    self.config["classes"].remove(cls)
+            save_config(self.config)
+            self.config_page.refresh()
+            self.readers_page.refresh()
+
+    def add_parallel(self):
+        from PyQt6.QtWidgets import QInputDialog
+        new_parallel, ok = QInputDialog.getText(self, "Добавить параллель", "Введите новую параллель:")
+        if ok and new_parallel:
+            if new_parallel not in self.config.get("parallels", []):
+                self.config["parallels"].append(new_parallel)
+                save_config(self.config)
+                self.config_page.refresh()
+                self.readers_page.refresh()
+
+    def delete_parallel(self):
+        selected = self.config_page.parallels_list_widget.selectedItems()
+        if selected:
+            for item in selected:
+                par = item.text()
+                if par in self.config.get("parallels", []):
+                    self.config["parallels"].remove(par)
+            save_config(self.config)
+            self.config_page.refresh()
+            self.readers_page.refresh()
+
+    def save_config_changes(self):
+        QMessageBox.information(self, "Сохранено", "Настройки сохранены!")
+
+    def update_books_table(self):
+        self.books_page.refresh()
+
+    def get_books_display_list(self):
+        return [f'{b.get("Title", "")} - {b.get("Author", "")}' for b in self.books]
+
+    def validate_student_data(self, data):
+        if (not is_valid_name(data["last_name"]) or
+            not is_valid_name(data["first_name"]) or
+            not is_valid_name(data["middle_name"])):
+            QMessageBox.warning(self, "Ошибка ввода", "Фамилия, Имя и Отчество должны содержать только буквы!")
+            return False
+        return True
 
 if __name__ == "__main__":
     from PyQt6.QtWidgets import QApplication

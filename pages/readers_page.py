@@ -1,0 +1,143 @@
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QPushButton,
+    QTableWidget, QTableWidgetItem, QHeaderView
+)
+from PyQt6.QtCore import QDate
+from PyQt6.QtGui import QColor
+
+class ReadersPage(QWidget):
+    def __init__(self, app):
+        super().__init__(app)
+        self.app = app
+        self._init_ui()
+
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+        # Поисковая панель
+        search_layout = QHBoxLayout()
+        search_layout.addWidget(QLabel("Поиск по ФИО:"))
+        self.fio_search = QLineEdit()
+        self.fio_search.setPlaceholderText("Введите ФИО...")
+        self.fio_search.textChanged.connect(self.on_filters_changed)
+        search_layout.addWidget(self.fio_search)
+        layout.addLayout(search_layout)
+
+        # Фильтры
+        filters_layout = QHBoxLayout()
+        filters_layout.addWidget(QLabel("Класс:"))
+        self.class_filter = QComboBox()
+        self.class_filter.addItem("Все")
+        self.class_filter.addItems(self.app.config.get("classes", []))
+        filters_layout.addWidget(self.class_filter)
+        filters_layout.addWidget(QLabel("Параллель:"))
+        self.parallel_filter = QComboBox()
+        self.parallel_filter.addItem("Все")
+        self.parallel_filter.addItems(self.app.config.get("parallels", []))
+        filters_layout.addWidget(self.parallel_filter)
+        filters_layout.addWidget(QLabel("Сортировать по дате сдачи:"))
+        self.due_date_filter = QComboBox()
+        self.due_date_filter.addItems(["Все", "Сдать раньше", "Сдать позже"])
+        filters_layout.addWidget(self.due_date_filter)
+        self.class_filter.currentTextChanged.connect(self.on_filters_changed)
+        self.parallel_filter.currentTextChanged.connect(self.on_filters_changed)
+        self.due_date_filter.currentTextChanged.connect(self.on_filters_changed)
+        layout.addLayout(filters_layout)
+
+        # Кнопки
+        button_layout = QHBoxLayout()
+        add_student_btn = QPushButton("Добавить ученика")
+        add_student_btn.clicked.connect(self.app.add_student)
+        button_layout.addWidget(add_student_btn)
+        clear_all_btn = QPushButton("Очистить всех")
+        clear_all_btn.clicked.connect(self.app.clear_all_students)
+        button_layout.addWidget(clear_all_btn)
+        layout.addLayout(button_layout)
+
+        # Таблица учеников (без столбца ID)
+        self.readers_table = QTableWidget(0, 7)
+        self.readers_table.setHorizontalHeaderLabels(
+            ["Фамилия", "Имя", "Отчество", "Класс", "Параллель", "Книги", "Срок сдачи"]
+        )
+        self.readers_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.readers_table.doubleClicked.connect(self.app.edit_student)
+        layout.addWidget(self.readers_table)
+
+        # Статус
+        status_layout = QHBoxLayout()
+        status_layout.addStretch()
+        self.readers_status_label = QLabel("Читателей: 0/0")
+        status_layout.addWidget(self.readers_status_label)
+        layout.addLayout(status_layout)
+        self.refresh()
+
+    def on_filters_changed(self):
+        self.refresh()
+
+    def get_filtered_students(self):
+        selected_class = self.class_filter.currentText()
+        selected_parallel = self.parallel_filter.currentText()
+        fio_query = self.fio_search.text().lower()
+        filtered = []
+        for st in self.app.students:
+            if selected_class != "Все" and st.get("class", "") != selected_class:
+                continue
+            if selected_parallel != "Все" and st.get("parallel", "") != selected_parallel:
+                continue
+            if fio_query:
+                if not (fio_query in st.get("last_name", "").lower() or
+                        fio_query in st.get("first_name", "").lower() or
+                        fio_query in st.get("middle_name", "").lower()):
+                    continue
+            filtered.append(st)
+        sort_option = self.due_date_filter.currentText()
+        if sort_option == "Сдать раньше":
+            def sort_key(student):
+                dates = [QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy")
+                         for b in student.get("books", [])
+                         if isinstance(b, dict) and QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy").isValid()]
+                return min(dates) if dates else QDate(9999, 12, 31)
+            filtered.sort(key=sort_key)
+        elif sort_option == "Сдать позже":
+            def sort_key(student):
+                dates = [QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy")
+                         for b in student.get("books", [])
+                         if isinstance(b, dict) and QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy").isValid()]
+                return max(dates) if dates else QDate(1900, 1, 1)
+            filtered.sort(key=sort_key, reverse=True)
+        return filtered
+
+    def refresh(self):
+        filtered = self.get_filtered_students()
+        self.readers_table.setRowCount(0)
+        for student in filtered:
+            row = self.readers_table.rowCount()
+            self.readers_table.insertRow(row)
+            self.set_student_row(row, student)
+        total = len(filtered)
+        self.readers_status_label.setText(f"Читателей: {self.readers_table.rowCount()}/{total}")
+
+    def set_student_row(self, row, data):
+        self.readers_table.setItem(row, 0, QTableWidgetItem(data["last_name"]))
+        self.readers_table.setItem(row, 1, QTableWidgetItem(data["first_name"]))
+        self.readers_table.setItem(row, 2, QTableWidgetItem(data["middle_name"]))
+        self.readers_table.setItem(row, 3, QTableWidgetItem(data["class"]))
+        self.readers_table.setItem(row, 4, QTableWidgetItem(data["parallel"]))
+        book_names = []
+        due_dates = []
+        overdue = False
+        current_date = QDate.currentDate()
+        for b in data.get("books", []):
+            if isinstance(b, dict):
+                book_names.append(b.get("book", ""))
+                due_date_str = b.get("due_date", "")
+                due_dates.append(due_date_str)
+                d = QDate.fromString(due_date_str, "dd.MM.yyyy")
+                if d.isValid() and d < current_date:
+                    overdue = True
+        self.readers_table.setItem(row, 5, QTableWidgetItem(", ".join(book_names)))
+        self.readers_table.setItem(row, 6, QTableWidgetItem(", ".join(due_dates)))
+        if overdue:
+            for col in range(self.readers_table.columnCount()):
+                item = self.readers_table.item(row, col)
+                if item:
+                    item.setBackground(QColor("red"))

@@ -1,13 +1,11 @@
 import sys
-import os
 import re
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QComboBox, QDialog,
-    QFormLayout, QMessageBox, QLineEdit, QCompleter, QStyle, QSizePolicy,
-    QStackedWidget, QTableWidget, QTableWidgetItem, QListWidget, QGroupBox,
-    QHeaderView, QDateEdit
+    QMessageBox, QLineEdit, QStackedWidget, QTableWidget, QTableWidgetItem, QListWidget,
+    QGroupBox, QHeaderView, QTableView
 )
-from PyQt6.QtCore import Qt, QTimer, QDate
+from PyQt6.QtCore import Qt, QTimer, QDate, QAbstractTableModel
 from PyQt6.QtGui import QColor
 
 # Импорт диалогов
@@ -21,16 +19,68 @@ from data.books_manager import load_books, save_books
 from data.students_manager import load_students, save_students
 
 # Импорт утилит
-from utils import is_valid_name, count_issued, check_issued_limits
+from utils import is_valid_name, check_issued_limits
+
+class BooksTableModel(QAbstractTableModel):
+    def __init__(self, books=None):
+        super().__init__()
+        self._books = books or []
+        self._headers = ["Название", "Автор", "Количество"]
+
+    def rowCount(self, parent=None):
+        return len(self._books)
+
+    def columnCount(self, parent=None):
+        return len(self._headers)
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if not index.isValid():
+            return None
+        if role == Qt.ItemDataRole.DisplayRole:
+            book = self._books[index.row()]
+            if index.column() == 0:
+                return book.get("Title", "")
+            elif index.column() == 1:
+                return book.get("Author", "")
+            elif index.column() == 2:
+                quantity = book.get("quantity")
+                return str(quantity) if quantity is not None else ""
+        return None
+
+    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
+        """Переопределяем метод, чтобы:
+           - Горизонтальные заголовки брались из self._headers
+           - Вертикальные заголовки показывали номера строк (section+1)
+        """
+        if role == Qt.ItemDataRole.DisplayRole:
+            # Для вертикального заголовка (номера строк)
+            if orientation == Qt.Orientation.Vertical:
+                return str(section + 1)
+            # Для горизонтального заголовка (названия столбцов)
+            elif orientation == Qt.Orientation.Horizontal:
+                return self._headers[section]
+        return None
+
+    def updateBooks(self, books):
+        self.beginResetModel()
+        self._books = books
+        self.endResetModel()
+
 
 class LibraryApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Школьная библиотека")
         self.setGeometry(100, 100, 900, 600)
-        self.config = load_config()
-        self.books = load_books()
-        self.students = load_students()
+        try:
+            self.config = load_config()
+            self.books = load_books()
+            self.students = load_students()
+        except Exception as e:
+            print("Ошибка загрузки данных:", e)
+            self.config = {}
+            self.books = []
+            self.students = []
 
         self.readers_loaded = False
         self.books_loaded = False
@@ -39,9 +89,6 @@ class LibraryApp(QWidget):
         self.lazy_readers_data = []
         self.current_reader_index = 0
         self.total_readers = 0
-        self.lazy_books_data = []
-        self.current_book_index = 0
-        self.total_books = 0
 
         self.book_search_timer = QTimer(self)
         self.book_search_timer.setSingleShot(True)
@@ -78,7 +125,7 @@ class LibraryApp(QWidget):
     def create_readers_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        # Верхняя панель поиска
+        # Панель поиска
         search_layout = QHBoxLayout()
         search_layout.addWidget(QLabel("Поиск по ФИО:"))
         self.fio_search = QLineEdit()
@@ -118,10 +165,10 @@ class LibraryApp(QWidget):
         button_layout.addWidget(clear_all_btn)
         layout.addLayout(button_layout)
 
-        # Таблица учеников
-        self.readers_table = QTableWidget(0, 8)
+        # Таблица читателей (7 столбцов: без колонки ID)
+        self.readers_table = QTableWidget(0, 7)
         self.readers_table.setHorizontalHeaderLabels(
-            ["Id", "Фамилия", "Имя", "Отчество", "Класс", "Параллель", "Книги", "Срок сдачи"]
+            ["Фамилия", "Имя", "Отчество", "Класс", "Параллель", "Книги", "Срок сдачи"]
         )
         self.readers_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.readers_table.doubleClicked.connect(self.edit_student)
@@ -204,12 +251,11 @@ class LibraryApp(QWidget):
         self.set_student_row(row, data)
 
     def set_student_row(self, row, data):
-        self.readers_table.setItem(row, 0, QTableWidgetItem(str(row + 1)))
-        self.readers_table.setItem(row, 1, QTableWidgetItem(data["last_name"]))
-        self.readers_table.setItem(row, 2, QTableWidgetItem(data["first_name"]))
-        self.readers_table.setItem(row, 3, QTableWidgetItem(data["middle_name"]))
-        self.readers_table.setItem(row, 4, QTableWidgetItem(data["class"]))
-        self.readers_table.setItem(row, 5, QTableWidgetItem(data["parallel"]))
+        self.readers_table.setItem(row, 0, QTableWidgetItem(data["last_name"]))
+        self.readers_table.setItem(row, 1, QTableWidgetItem(data["first_name"]))
+        self.readers_table.setItem(row, 2, QTableWidgetItem(data["middle_name"]))
+        self.readers_table.setItem(row, 3, QTableWidgetItem(data["class"]))
+        self.readers_table.setItem(row, 4, QTableWidgetItem(data["parallel"]))
         book_names = []
         due_dates = []
         overdue = False
@@ -222,8 +268,8 @@ class LibraryApp(QWidget):
                 d = QDate.fromString(due_date_str, "dd.MM.yyyy")
                 if d.isValid() and d < current_date:
                     overdue = True
-        self.readers_table.setItem(row, 6, QTableWidgetItem(", ".join(book_names)))
-        self.readers_table.setItem(row, 7, QTableWidgetItem(", ".join(due_dates)))
+        self.readers_table.setItem(row, 5, QTableWidgetItem(", ".join(book_names)))
+        self.readers_table.setItem(row, 6, QTableWidgetItem(", ".join(due_dates)))
         if overdue:
             for col in range(self.readers_table.columnCount()):
                 item = self.readers_table.item(row, col)
@@ -242,11 +288,14 @@ class LibraryApp(QWidget):
         search_layout.addWidget(search_label)
         search_layout.addWidget(self.book_search_edit)
         layout.addLayout(search_layout)
-        # Таблица книг
-        self.books_table = QTableWidget(0, 3)
-        self.books_table.setHorizontalHeaderLabels(["Название", "Автор", "Количество"])
-        self.books_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        layout.addWidget(self.books_table)
+        # Используем QTableView с моделью для книг
+        self.books_table_view = QTableView()
+        self.books_model = BooksTableModel(self.books)
+        self.books_table_view.setModel(self.books_model)
+        self.books_table_view.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        # Убеждаемся, что вертикальный заголовок (номера строк) виден
+        self.books_table_view.verticalHeader().setVisible(True)
+        layout.addWidget(self.books_table_view)
         # Панель кнопок
         btn_layout = QHBoxLayout()
         add_book_btn = QPushButton("Добавить книгу")
@@ -265,7 +314,7 @@ class LibraryApp(QWidget):
         self.books_status_label = QLabel("Книг: 0/0")
         status_layout.addWidget(self.books_status_label)
         layout.addLayout(status_layout)
-        self.update_books_table()  # Обновляем таблицу при создании страницы
+        self.update_books_table()
         return page
 
     def on_book_search_text_changed(self):
@@ -274,14 +323,7 @@ class LibraryApp(QWidget):
     def update_books_table(self):
         query = self.book_search_edit.text().lower() if hasattr(self, 'book_search_edit') else ""
         filtered = [bk for bk in self.books if (not query) or (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
-        self.books_table.setRowCount(0)
-        for bk in filtered:
-            row = self.books_table.rowCount()
-            self.books_table.insertRow(row)
-            self.books_table.setItem(row, 0, QTableWidgetItem(bk.get("Title", "")))
-            self.books_table.setItem(row, 1, QTableWidgetItem(bk.get("Author", "")))
-            quantity = bk.get("quantity")
-            self.books_table.setItem(row, 2, QTableWidgetItem(str(quantity) if quantity is not None else ""))
+        self.books_model.updateBooks(filtered)
         self.total_books = len(filtered)
         self.update_books_status()
 
@@ -292,32 +334,37 @@ class LibraryApp(QWidget):
         self.books_status_label.setText(f"Книг: {self.total_books}/{len(self.books)}")
 
     def add_book(self):
-        dlg = BookDialog(self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            data = dlg.get_data()
-            if data["Title"] and data["Author"]:
-                self.books.append(data)
-                save_books(self.books)
-                # Обновляем локальный список книг и таблицу
-                self.books = load_books()
-                self.update_books_table()
-            else:
-                QMessageBox.warning(self, "Ошибка", "Поля «Название» и «Автор» должны быть заполнены!")
+        try:
+            dlg = BookDialog(self)
+            if dlg.exec() == QDialog.DialogCode.Accepted:
+                data = dlg.get_data()
+                if data["Title"] and data["Author"]:
+                    self.books.append(data)
+                    save_books(self.books)
+                    self.books = load_books()
+                    self.update_books_table()
+                else:
+                    QMessageBox.warning(self, "Ошибка", "Поля «Название» и «Автор» должны быть заполнены!")
+        except Exception as e:
+            print("Ошибка при добавлении книги:", e)
 
     def delete_book(self):
-        selected = self.books_table.selectedItems()
-        if not selected:
-            QMessageBox.warning(self, "Ошибка", "Выберите книгу для удаления!")
-            return
-        row = selected[0].row()
-        query = self.book_search_edit.text().lower()
-        filtered = [bk for bk in self.books if (not query) or (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
-        if row < len(filtered):
-            book_to_delete = filtered[row]
-            self.books.remove(book_to_delete)
-            save_books(self.books)
-            self.books = load_books()
-            self.update_books_table()
+        try:
+            selected_indexes = self.books_table_view.selectionModel().selectedRows()
+            if not selected_indexes:
+                QMessageBox.warning(self, "Ошибка", "Выберите книгу для удаления!")
+                return
+            row = selected_indexes[0].row()
+            query = self.book_search_edit.text().lower()
+            filtered = [bk for bk in self.books if (not query) or (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
+            if row < len(filtered):
+                book_to_delete = filtered[row]
+                self.books.remove(book_to_delete)
+                save_books(self.books)
+                self.books = load_books()
+                self.update_books_table()
+        except Exception as e:
+            print("Ошибка при удалении книги:", e)
 
     def clear_all_books(self):
         msg_box = QMessageBox(self)

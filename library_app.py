@@ -233,6 +233,7 @@ class LibraryApp(QWidget):
     def create_books_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
+        # Панель поиска
         search_layout = QHBoxLayout()
         search_label = QLabel("Поиск:")
         self.book_search_edit = QLineEdit()
@@ -241,18 +242,24 @@ class LibraryApp(QWidget):
         search_layout.addWidget(search_label)
         search_layout.addWidget(self.book_search_edit)
         layout.addLayout(search_layout)
+        # Таблица книг
         self.books_table = QTableWidget(0, 3)
         self.books_table.setHorizontalHeaderLabels(["Название", "Автор", "Количество"])
         self.books_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.books_table)
+        # Панель кнопок
         btn_layout = QHBoxLayout()
         add_book_btn = QPushButton("Добавить книгу")
         add_book_btn.clicked.connect(self.add_book)
         del_book_btn = QPushButton("Удалить книгу")
         del_book_btn.clicked.connect(self.delete_book)
+        clear_books_btn = QPushButton("Очистить все книги")
+        clear_books_btn.clicked.connect(self.clear_all_books)
         btn_layout.addWidget(add_book_btn)
         btn_layout.addWidget(del_book_btn)
+        btn_layout.addWidget(clear_books_btn)
         layout.addLayout(btn_layout)
+        # Статус
         status_layout = QHBoxLayout()
         status_layout.addStretch()
         self.books_status_label = QLabel("Книг: 0/0")
@@ -291,6 +298,7 @@ class LibraryApp(QWidget):
             if data["Title"] and data["Author"]:
                 self.books.append(data)
                 save_books(self.books)
+                # Обновляем локальный список книг и таблицу
                 self.books = load_books()
                 self.update_books_table()
             else:
@@ -311,10 +319,27 @@ class LibraryApp(QWidget):
             self.books = load_books()
             self.update_books_table()
 
+    def clear_all_books(self):
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Подтверждение")
+        msg_box.setText("Вы действительно хотите удалить все книги?")
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        yes_button = msg_box.button(QMessageBox.StandardButton.Yes)
+        no_button = msg_box.button(QMessageBox.StandardButton.No)
+        yes_button.setText("Да")
+        no_button.setText("Нет")
+        ret = msg_box.exec()
+        if ret == QMessageBox.StandardButton.Yes.value:
+            self.books = []
+            save_books(self.books)
+            self.books = load_books()
+            self.update_books_table()
+
     def create_config_page(self):
         page = QWidget()
         outer_layout = QVBoxLayout(page)
         main_layout = QHBoxLayout()
+
         classes_group = QGroupBox("Классы")
         classes_layout = QVBoxLayout(classes_group)
         self.classes_list_widget = QListWidget()

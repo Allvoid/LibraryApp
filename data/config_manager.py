@@ -1,3 +1,4 @@
+# data/config_manager.py
 import os
 import json
 from os.path import dirname, abspath, join

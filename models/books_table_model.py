@@ -1,3 +1,4 @@
+# models/books_table_model.py
 from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex
 
 # Copyright 2025 Your Name

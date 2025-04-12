@@ -1,3 +1,4 @@
+# pages/books_page.py
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTableView, QHeaderView
 from models.books_table_model import BooksTableModel
 

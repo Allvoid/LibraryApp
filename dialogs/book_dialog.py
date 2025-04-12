@@ -1,3 +1,4 @@
+# dialogs/book_dialog.py
 from PyQt6.QtWidgets import QDialog, QFormLayout, QLineEdit, QHBoxLayout, QPushButton, QSizePolicy
 from PyQt6.QtGui import QIntValidator
 

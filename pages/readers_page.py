@@ -1,3 +1,4 @@
+# pages/readers_page.py
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView

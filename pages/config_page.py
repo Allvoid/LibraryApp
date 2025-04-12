@@ -1,3 +1,4 @@
+# pages/config_page.py
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QListWidget, QLineEdit, QPushButton, QLabel, QMessageBox
 
 # Copyright 2025 Your Name

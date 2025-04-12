@@ -1,3 +1,4 @@
+# library_app.py
 import sys
 import re
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QStackedWidget, QMessageBox

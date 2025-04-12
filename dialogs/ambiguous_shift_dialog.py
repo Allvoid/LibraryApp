@@ -1,3 +1,4 @@
+# dialogs/ambiguous_shift_dialog.py
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, QTableWidgetItem, QPushButton, QMessageBox, QHeaderView
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor

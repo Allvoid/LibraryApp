@@ -1,3 +1,4 @@
+# dialogs/student_dialog.py
 from PyQt6.QtWidgets import (
     QDialog, QFormLayout, QLineEdit, QComboBox, QCompleter, QSizePolicy,
     QPushButton, QWidget, QHBoxLayout, QDateEdit, QVBoxLayout, QStyle,

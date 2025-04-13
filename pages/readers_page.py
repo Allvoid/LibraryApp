@@ -1,10 +1,10 @@
 # pages/readers_page.py
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QPushButton,
-    QTableWidget, QTableWidgetItem, QHeaderView
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QTableWidget,
+    QTableWidgetItem, QHeaderView, QPushButton
 )
-from PyQt6.QtCore import QDate
-from PyQt6.QtGui import QColor
+from PyQt6.QtCore import QDate, QTimer
+from PyQt6.QtGui import QColor, QResizeEvent
 
 # Copyright 2025 Your Name
 #
@@ -24,7 +24,15 @@ class ReadersPage(QWidget):
     def __init__(self, app):
         super().__init__(app)
         self.app = app
+        self.readers_page_size = 50
+        self.current_readers_loaded = 0
+        self.prev_fio = ""
+        self.loading = False  # флаг загрузки
         self._init_ui()
+        # Авто-таймер, который каждые 500 мс проверяет необходимость подгрузки
+        self.auto_timer = QTimer(self)
+        self.auto_timer.timeout.connect(self.check_and_load_more)
+        self.auto_timer.start(500)
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
@@ -36,7 +44,6 @@ class ReadersPage(QWidget):
         self.fio_search.textChanged.connect(self.on_filters_changed)
         search_layout.addWidget(self.fio_search)
         layout.addLayout(search_layout)
-
         # Фильтры
         filters_layout = QHBoxLayout()
         filters_layout.addWidget(QLabel("Класс:"))
@@ -57,18 +64,16 @@ class ReadersPage(QWidget):
         self.parallel_filter.currentTextChanged.connect(self.on_filters_changed)
         self.due_date_filter.currentTextChanged.connect(self.on_filters_changed)
         layout.addLayout(filters_layout)
-
-        # Кнопки
-        button_layout = QHBoxLayout()
+        # Панель кнопок
+        btn_layout = QHBoxLayout()
         add_student_btn = QPushButton("Добавить ученика")
         add_student_btn.clicked.connect(self.app.add_student)
-        button_layout.addWidget(add_student_btn)
         clear_all_btn = QPushButton("Очистить всех")
         clear_all_btn.clicked.connect(self.app.clear_all_students)
-        button_layout.addWidget(clear_all_btn)
-        layout.addLayout(button_layout)
-
-        # Таблица учеников (без столбца ID)
+        btn_layout.addWidget(add_student_btn)
+        btn_layout.addWidget(clear_all_btn)
+        layout.addLayout(btn_layout)
+        # Таблица учеников
         self.readers_table = QTableWidget(0, 7)
         self.readers_table.setHorizontalHeaderLabels(
             ["Фамилия", "Имя", "Отчество", "Класс", "Параллель", "Книги", "Срок сдачи"]
@@ -76,19 +81,46 @@ class ReadersPage(QWidget):
         self.readers_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.readers_table.doubleClicked.connect(self.app.edit_student)
         layout.addWidget(self.readers_table)
-
+        # Подключаем автоматическую загрузку по скроллу (на всякий случай)
+        self.readers_table.verticalScrollBar().valueChanged.connect(self.on_readers_scroll)
         # Статус
         status_layout = QHBoxLayout()
         status_layout.addStretch()
         self.readers_status_label = QLabel("Читателей: 0/0")
         status_layout.addWidget(self.readers_status_label)
         layout.addLayout(status_layout)
+        # Инициализация
+        self.prev_fio = self.fio_search.text().lower()
+        self.current_readers_loaded = self.readers_page_size
         self.refresh()
 
     def on_filters_changed(self):
+        current_fio = self.fio_search.text().lower()
+        if current_fio != self.prev_fio:
+            self.prev_fio = current_fio
+            self.current_readers_loaded = self.readers_page_size
+        else:
+            self.current_readers_loaded = self.readers_page_size  # сброс при изменении фильтров
         self.refresh()
 
-    def get_filtered_students(self):
+    def on_readers_scroll(self, value):
+        scrollbar = self.readers_table.verticalScrollBar()
+        if value == scrollbar.maximum():
+            self.load_more()
+
+    def load_more(self):
+        if self.loading:
+            return
+        self.loading = True
+        filtered_full = self.get_filtered_students(full=True)
+        if self.current_readers_loaded < len(filtered_full):
+            self.current_readers_loaded += self.readers_page_size
+            if self.current_readers_loaded > len(filtered_full):
+                self.current_readers_loaded = len(filtered_full)
+            self.refresh()
+        self.loading = False
+
+    def get_filtered_students(self, full=False):
         selected_class = self.class_filter.currentText()
         selected_parallel = self.parallel_filter.currentText()
         fio_query = self.fio_search.text().lower()
@@ -119,17 +151,41 @@ class ReadersPage(QWidget):
                          if isinstance(b, dict) and QDate.fromString(b.get("due_date", ""), "dd.MM.yyyy").isValid()]
                 return max(dates) if dates else QDate(1900, 1, 1)
             filtered.sort(key=sort_key, reverse=True)
-        return filtered
+        return filtered[:self.current_readers_loaded] if not full else filtered
 
     def refresh(self):
-        filtered = self.get_filtered_students()
+        filtered_full = self.get_filtered_students(full=True)
+        filtered = self.get_filtered_students(full=False)
         self.readers_table.setRowCount(0)
         for student in filtered:
             row = self.readers_table.rowCount()
             self.readers_table.insertRow(row)
             self.set_student_row(row, student)
-        total = len(filtered)
-        self.readers_status_label.setText(f"Читателей: {self.readers_table.rowCount()}/{total}")
+        total = len(filtered_full)
+        loaded = len(filtered)
+        self.readers_status_label.setText(f"Читателей: {loaded}/{total}")
+
+    def check_and_load_more(self):
+        filtered_full = self.get_filtered_students(full=True)
+        if self.current_readers_loaded < len(filtered_full):
+            self.load_more()
+
+    def auto_load_more_if_needed(self):
+        if self.loading:
+            return
+        viewport_height = self.readers_table.viewport().height()
+        if self.readers_table.rowCount() > 0:
+            row_height = self.readers_table.sizeHintForRow(0)
+            content_height = row_height * self.readers_table.rowCount()
+        else:
+            content_height = 0
+        filtered_full = self.get_filtered_students(full=True)
+        if content_height < viewport_height and self.current_readers_loaded < len(filtered_full):
+            self.load_more()
+
+    def resizeEvent(self, event: QResizeEvent):
+        super().resizeEvent(event)
+        QTimer.singleShot(0, self.check_and_load_more)
 
     def set_student_row(self, row, data):
         self.readers_table.setItem(row, 0, QTableWidgetItem(data["last_name"]))
@@ -156,3 +212,7 @@ class ReadersPage(QWidget):
                 item = self.readers_table.item(row, col)
                 if item:
                     item.setBackground(QColor("red"))
+
+    def reset_lazy_loading(self):
+        self.current_readers_loaded = self.readers_page_size
+        self.refresh()

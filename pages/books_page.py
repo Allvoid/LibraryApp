@@ -1,6 +1,8 @@
 # pages/books_page.py
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTableView, QHeaderView
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTableView, QPushButton, QHeaderView
 from models.books_table_model import BooksTableModel
+from PyQt6.QtCore import QTimer
+from PyQt6.QtGui import QResizeEvent
 
 # Copyright 2025 Your Name
 #
@@ -20,7 +22,15 @@ class BooksPage(QWidget):
     def __init__(self, app):
         super().__init__(app)
         self.app = app
+        self.books_page_size = 50
+        self.current_books_loaded = 0
+        self.prev_query = ""
+        self.loading = False  # флаг загрузки
         self._init_ui()
+        # Автоматическая проверка каждые 500 мс
+        self.auto_timer = QTimer(self)
+        self.auto_timer.timeout.connect(self.check_and_load_more)
+        self.auto_timer.start(500)
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
@@ -32,13 +42,12 @@ class BooksPage(QWidget):
         self.book_search_edit.textChanged.connect(self.on_book_search_text_changed)
         search_layout.addWidget(self.book_search_edit)
         layout.addLayout(search_layout)
-        # QTableView с моделью для книг
+        # Таблица
         self.books_table_view = QTableView()
-        self.books_model = BooksTableModel(self.app.books)
+        self.books_model = BooksTableModel([])
         self.books_table_view.setModel(self.books_model)
         self.books_table_view.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.books_table_view.verticalHeader().setVisible(True)
-        # Настройка выбора всей строки
         self.books_table_view.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         self.books_table_view.setSelectionMode(QTableView.SelectionMode.SingleSelection)
         layout.addWidget(self.books_table_view)
@@ -60,15 +69,56 @@ class BooksPage(QWidget):
         self.books_status_label = QLabel("Книг: 0/0")
         status_layout.addWidget(self.books_status_label)
         layout.addLayout(status_layout)
+        # Подключаем автоматическую загрузку при прокрутке (на всякий случай)
+        self.books_table_view.verticalScrollBar().valueChanged.connect(self.on_books_scroll)
+        # Инициализация
+        self.prev_query = self.book_search_edit.text().lower()
+        self.current_books_loaded = self.books_page_size
         self.refresh()
 
     def on_book_search_text_changed(self):
+        current_query = self.book_search_edit.text().lower()
+        if current_query != self.prev_query:
+            self.prev_query = current_query
+            self.current_books_loaded = self.books_page_size
         self.refresh()
+
+    def on_books_scroll(self, value):
+        scrollbar = self.books_table_view.verticalScrollBar()
+        if value == scrollbar.maximum():
+            self.load_more()
+
+    def load_more(self):
+        if self.loading:
+            return
+        self.loading = True
+        query = self.book_search_edit.text().lower()
+        filtered = [bk for bk in self.app.books if (not query) or
+                    (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
+        if self.current_books_loaded < len(filtered):
+            self.current_books_loaded += self.books_page_size
+            if self.current_books_loaded > len(filtered):
+                self.current_books_loaded = len(filtered)
+            self.refresh()
+        self.loading = False
 
     def refresh(self):
         query = self.book_search_edit.text().lower()
         filtered = [bk for bk in self.app.books if (not query) or
                     (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
-        self.books_model.updateBooks(filtered)
+        display_books = filtered[:self.current_books_loaded]
+        self.books_model.updateBooks(display_books)
         total = len(filtered)
-        self.books_status_label.setText(f"Книг: {total}/{len(self.app.books)}")
+        loaded = len(display_books)
+        self.books_status_label.setText(f"Книг: {loaded}/{total}")
+
+    def check_and_load_more(self):
+        query = self.book_search_edit.text().lower()
+        filtered = [bk for bk in self.app.books if (not query) or
+                    (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
+        if self.current_books_loaded < len(filtered):
+            self.load_more()
+
+    def resizeEvent(self, event: QResizeEvent):
+        super().resizeEvent(event)
+        QTimer.singleShot(0, self.check_and_load_more)

@@ -1,15 +1,13 @@
 # library_app.py
 import sys
 import re
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QStackedWidget, QMessageBox
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QStackedWidget, QMessageBox, QDialog
 from data.config_manager import load_config, save_config
 from pages.readers_page import ReadersPage
 from pages.books_page import BooksPage
 import PyQt6.QtWidgets as QtWidgets
 from pages.config_page import ConfigPage
-from data.config_manager import load_config
 from data.books_manager import load_books, save_books
-from PyQt6.QtWidgets import QDialog
 from data.students_manager import load_students, save_students
 from utils import is_valid_name, check_issued_limits
 
@@ -68,8 +66,7 @@ class LibraryApp(QWidget):
         for i, btn in enumerate(self.menu_buttons):
             btn.setStyleSheet("background-color: lightblue; font-weight: bold;" if i == index else "")
 
-    # Методы, вызываемые страницами.
-    # Здесь возвращаем полную функциональность, перенесённую из исходной версии.
+    # Методы, вызываемые страницами
     def add_student(self):
         from dialogs.student_dialog import StudentDialog
         dlg = StudentDialog(self, student_data=None,
@@ -86,11 +83,12 @@ class LibraryApp(QWidget):
                 return
             self.students.append(data)
             save_students(self.students)
+            self.students = load_students()
+            self.readers_page.reset_lazy_loading()
             self.readers_page.refresh()
 
     def edit_student(self, index):
-        # index – объект QModelIndex, полученный при двойном клике по таблице
-        filtered = self.readers_page.get_filtered_students()
+        filtered = self.readers_page.get_filtered_students(full=True)
         row = index.row()
         if row >= len(filtered):
             return
@@ -101,9 +99,11 @@ class LibraryApp(QWidget):
                             classes_list=self.config.get("classes", []),
                             parallels_list=self.config.get("parallels", []))
         res = dlg.exec()
-        if res == 2:
+        if res == 2:  # нажата кнопка удаления ученика
             self.students.remove(student)
             save_students(self.students)
+            self.students = load_students()
+            self.readers_page.reset_lazy_loading()
             self.readers_page.refresh()
         elif res == QDialog.DialogCode.Accepted:
             new_data = dlg.get_data()
@@ -116,6 +116,8 @@ class LibraryApp(QWidget):
             idx = self.students.index(student)
             self.students[idx] = new_data
             save_students(self.students)
+            self.students = load_students()
+            self.readers_page.reset_lazy_loading()
             self.readers_page.refresh()
 
     def clear_all_students(self):
@@ -125,6 +127,8 @@ class LibraryApp(QWidget):
         if reply == QMessageBox.StandardButton.Yes:
             self.students = []
             save_students(self.students)
+            self.students = load_students()
+            self.readers_page.reset_lazy_loading()
             self.readers_page.refresh()
 
     def add_book(self):
@@ -147,7 +151,8 @@ class LibraryApp(QWidget):
             return
         row = indexes[0].row()
         query = self.books_page.book_search_edit.text().lower()
-        filtered = [bk for bk in self.books if (not query) or (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
+        filtered = [bk for bk in self.books if (not query) or
+                    (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
         if row < len(filtered):
             book_to_delete = filtered[row]
             self.books.remove(book_to_delete)
@@ -179,20 +184,24 @@ class LibraryApp(QWidget):
         if ambiguous_students:
             from dialogs.ambiguous_shift_dialog import AmbiguousShiftDialog
             dlg = AmbiguousShiftDialog(ambiguous_students, last_class, parent=self)
-            if dlg.exec() == QDialog.DialogCode.Accepted:
+            result = dlg.exec()
+            if result == QDialog.DialogCode.Accepted:
                 self.students = [st for st in self.students if not st.get("to_delete", False)]
-        save_students(self.students)
-        self.readers_page.refresh()
+                save_students(self.students)
+                self.students = load_students()
+                self.readers_page.reset_lazy_loading()
+                self.readers_page.refresh()
+            # Если нажато "Отмена", данных не обновляем
+        # Если неоднозначных учеников нет, ничего не делаем
 
     def add_class(self):
-        from PyQt6.QtWidgets import QInputDialog
-        new_class, ok = QInputDialog.getText(self, "Добавить класс", "Введите новый класс:")
-        if ok and new_class:
-            if new_class not in self.config.get("classes", []):
-                self.config["classes"].append(new_class)
-                save_config(self.config)
-                self.config_page.refresh()
-                self.readers_page.refresh()
+        new_class = self.config_page.new_class_edit.text().strip()
+        if new_class and new_class not in self.config.get("classes", []):
+            self.config["classes"].append(new_class)
+            save_config(self.config)
+            self.config_page.refresh()
+            self.readers_page.refresh()
+            self.config_page.new_class_edit.clear()
 
     def delete_class(self):
         selected = self.config_page.classes_list_widget.selectedItems()
@@ -206,14 +215,13 @@ class LibraryApp(QWidget):
             self.readers_page.refresh()
 
     def add_parallel(self):
-        from PyQt6.QtWidgets import QInputDialog
-        new_parallel, ok = QInputDialog.getText(self, "Добавить параллель", "Введите новую параллель:")
-        if ok and new_parallel:
-            if new_parallel not in self.config.get("parallels", []):
-                self.config["parallels"].append(new_parallel)
-                save_config(self.config)
-                self.config_page.refresh()
-                self.readers_page.refresh()
+        new_parallel = self.config_page.new_parallel_edit.text().strip()
+        if new_parallel and new_parallel not in self.config.get("parallels", []):
+            self.config["parallels"].append(new_parallel)
+            save_config(self.config)
+            self.config_page.refresh()
+            self.readers_page.refresh()
+            self.config_page.new_parallel_edit.clear()
 
     def delete_parallel(self):
         selected = self.config_page.parallels_list_widget.selectedItems()
@@ -226,10 +234,8 @@ class LibraryApp(QWidget):
             self.config_page.refresh()
             self.readers_page.refresh()
 
-    def save_config_changes(self):
-        QMessageBox.information(self, "Сохранено", "Настройки сохранены!")
-
     def update_books_table(self):
+        self.books_page.current_books_loaded = self.books_page.books_page_size
         self.books_page.refresh()
 
     def get_books_display_list(self):

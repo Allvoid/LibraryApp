@@ -1,5 +1,5 @@
 # pages/config_page.py
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QListWidget, QLineEdit, QPushButton, QLabel, QMessageBox
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QListWidget, QLineEdit, QPushButton, QLabel
 
 # Copyright 2025 Your Name
 #
@@ -63,15 +63,12 @@ class ConfigPage(QWidget):
         parallels_layout.addStretch()
         main_layout.addWidget(parallels_group)
         outer_layout.addLayout(main_layout)
-
+        # Нижняя панель: Убираем кнопку "Сохранить изменения", оставляем только кнопку сдвига учеников
         bottom_layout = QHBoxLayout()
         bottom_layout.addStretch()
         shift_btn = QPushButton("Сдвинуть учеников на следующий класс")
         shift_btn.clicked.connect(self.app.shift_students)
         bottom_layout.addWidget(shift_btn)
-        save_btn = QPushButton("Сохранить изменения")
-        save_btn.clicked.connect(self.app.save_config_changes)
-        bottom_layout.addWidget(save_btn)
         bottom_layout.addStretch()
         outer_layout.addLayout(bottom_layout)
 

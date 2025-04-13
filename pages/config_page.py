@@ -63,7 +63,7 @@ class ConfigPage(QWidget):
         parallels_layout.addStretch()
         main_layout.addWidget(parallels_group)
         outer_layout.addLayout(main_layout)
-        # Нижняя панель: Убираем кнопку "Сохранить изменения", оставляем только кнопку сдвига учеников
+        # Нижняя панель: убираем кнопку "Сохранить изменения", оставляем только кнопку сдвига учеников
         bottom_layout = QHBoxLayout()
         bottom_layout.addStretch()
         shift_btn = QPushButton("Сдвинуть учеников на следующий класс")

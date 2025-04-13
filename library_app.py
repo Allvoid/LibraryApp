@@ -1,7 +1,10 @@
 # library_app.py
 import sys
 import re
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QStackedWidget, QMessageBox, QDialog
+from PyQt6.QtWidgets import (
+    QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QStackedWidget, QMessageBox,
+    QDialog
+)
 from data.config_manager import load_config, save_config
 from pages.readers_page import ReadersPage
 from pages.books_page import BooksPage
@@ -10,20 +13,6 @@ from pages.config_page import ConfigPage
 from data.books_manager import load_books, save_books
 from data.students_manager import load_students, save_students
 from utils import is_valid_name, check_issued_limits
-
-# Copyright 2025 Your Name
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
 class LibraryApp(QWidget):
     def __init__(self):
@@ -66,7 +55,23 @@ class LibraryApp(QWidget):
         for i, btn in enumerate(self.menu_buttons):
             btn.setStyleSheet("background-color: lightblue; font-weight: bold;" if i == index else "")
 
-    # Методы, вызываемые страницами
+    # Пример вспомогательной функции для диалога подтверждения с кнопками "Да" и "Нет"
+    def ask_yes_no(self, title, text) -> bool:
+        """
+        Возвращает True, если пользователь нажал "Да".
+        Иначе (нажал "Нет" или закрыл окно) возвращает False.
+        """
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(text)
+        # Добавляем 2 кастомные кнопки
+        yes_button = msg_box.addButton("Да", QMessageBox.ButtonRole.YesRole)
+        no_button = msg_box.addButton("Нет", QMessageBox.ButtonRole.NoRole)
+        msg_box.setDefaultButton(yes_button)  # По умолчанию фокус на "Да"
+        msg_box.exec()
+        return msg_box.clickedButton() == yes_button
+
+    # Методы, вызываемые страницами.
     def add_student(self):
         from dialogs.student_dialog import StudentDialog
         dlg = StudentDialog(self, student_data=None,
@@ -99,7 +104,7 @@ class LibraryApp(QWidget):
                             classes_list=self.config.get("classes", []),
                             parallels_list=self.config.get("parallels", []))
         res = dlg.exec()
-        if res == 2:  # нажата кнопка удаления ученика
+        if res == 2:
             self.students.remove(student)
             save_students(self.students)
             self.students = load_students()
@@ -121,10 +126,7 @@ class LibraryApp(QWidget):
             self.readers_page.refresh()
 
     def clear_all_students(self):
-        reply = QMessageBox.question(self, "Подтверждение",
-                                     "Вы действительно хотите очистить всех учеников?",
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        if reply == QMessageBox.StandardButton.Yes:
+        if self.ask_yes_no("Подтверждение", "Вы действительно хотите очистить всех учеников?"):
             self.students = []
             save_students(self.students)
             self.students = load_students()
@@ -161,10 +163,7 @@ class LibraryApp(QWidget):
             self.update_books_table()
 
     def clear_all_books(self):
-        reply = QMessageBox.question(self, "Подтверждение",
-                                     "Вы действительно хотите удалить все книги?",
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        if reply == QMessageBox.StandardButton.Yes:
+        if self.ask_yes_no("Подтверждение", "Вы действительно хотите удалить все книги?"):
             self.books = []
             save_books(self.books)
             self.books = load_books()
@@ -191,8 +190,7 @@ class LibraryApp(QWidget):
                 self.students = load_students()
                 self.readers_page.reset_lazy_loading()
                 self.readers_page.refresh()
-            # Если нажато "Отмена", данных не обновляем
-        # Если неоднозначных учеников нет, ничего не делаем
+            # Если нажато "Отмена", никаких обновлений не выполняется
 
     def add_class(self):
         new_class = self.config_page.new_class_edit.text().strip()
@@ -242,6 +240,7 @@ class LibraryApp(QWidget):
         return [f'{b.get("Title", "")} - {b.get("Author", "")}' for b in self.books]
 
     def validate_student_data(self, data):
+        from PyQt6.QtWidgets import QMessageBox
         if (not is_valid_name(data["last_name"]) or
             not is_valid_name(data["first_name"]) or
             not is_valid_name(data["middle_name"])):

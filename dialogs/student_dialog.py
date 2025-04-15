@@ -2,7 +2,7 @@
 from PyQt6.QtWidgets import (
     QDialog, QFormLayout, QLineEdit, QComboBox, QCompleter, QSizePolicy,
     QPushButton, QWidget, QHBoxLayout, QDateEdit, QVBoxLayout, QStyle,
-    QScrollArea
+    QScrollArea, QCheckBox
 )
 from PyQt6.QtCore import Qt, QTimer, QDate
 
@@ -20,7 +20,6 @@ class StudentDialog(QDialog):
     def _init_ui(self):
         # Создаем главный вертикальный layout для всего диалога
         main_layout = QVBoxLayout(self)
-        # Можно настроить отступы по желанию; здесь оставляем небольшие отступы
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
 
@@ -29,7 +28,6 @@ class StudentDialog(QDialog):
         form_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
         # -------------------- Поля ФИО --------------------
-        # Поля растягиваются только по ширине (Policy.Expanding по X и Policy.Fixed по Y).
         self.last_name_edit = QLineEdit()
         self.last_name_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
@@ -59,7 +57,6 @@ class StudentDialog(QDialog):
         self.books_widget = QWidget()
         self.books_layout = QVBoxLayout(self.books_widget)
         self.books_layout.setContentsMargins(0, 0, 0, 0)
-        # Располагаем добавленные книги у верхнего края
         self.books_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         # QScrollArea для прокрутки списка книг
@@ -89,76 +86,80 @@ class StudentDialog(QDialog):
                 for bk in books:
                     if isinstance(bk, dict):
                         initial_text = bk.get("book", "")
-                        initial_date = QDate.fromString(bk.get("due_date", ""), "dd.MM.yyyy")
+                        due_date_str = bk.get("due_date", "")
+                        initial_date = QDate.fromString(due_date_str, "dd.MM.yyyy") if due_date_str else None
                         self.add_book_selector(initial_text=initial_text, initial_date=initial_date)
                     else:
-                        # Если вдруг формат книги — просто строка
                         self.add_book_selector(initial_text=bk)
             else:
-                # Если книг нет, всё равно добавляем одну строку
                 self.add_book_selector()
         else:
-            # Если это новый ученик, добавляем одну строку для книги
             self.add_book_selector()
 
-        # Добавляем форму в главный layout
         main_layout.addLayout(form_layout)
 
         # -------------------- Кнопки управления --------------------
-        # Создаем горизонтальный layout для кнопок вне QFormLayout, чтобы убрать лишний отступ слева
         btn_layout = QHBoxLayout()
-        btn_layout.setContentsMargins(0, 0, 0, 0)
-        btn_layout.setSpacing(10)
-
-        # Если редактируем существующего ученика, добавляем кнопку удаления
         if self.student_data is not None:
             delete_btn = QPushButton("Удалить ученика")
             delete_btn.clicked.connect(lambda: self.done(2))
             btn_layout.addWidget(delete_btn)
 
-        # Кнопка "Отмена" – благодаря тому, что layout добавлен напрямую в main_layout, она будет ближе к левому краю
         cancel_btn = QPushButton("Отмена")
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
         btn_layout.addStretch()
 
-        # Кнопка "Сохранить ученика" – справа
         save_btn = QPushButton("Сохранить ученика")
         save_btn.clicked.connect(self.accept)
         btn_layout.addWidget(save_btn)
-
-        # Добавляем кнопочную панель в главный layout
         main_layout.addLayout(btn_layout)
 
     def add_book_selector(self, initial_text="", initial_date=None):
         """
-        Добавляет одну строку (виджет) для выбора книги и даты возврата.
+        Добавляет одну строку (виджет) для выбора книги и, опционально, срока возврата.
+        Если чекбокс "Указать срок сдачи" не установлен, QDateEdit скрыт и срок не указывается.
         """
         container = QWidget()
         h_layout = QHBoxLayout(container)
         h_layout.setContentsMargins(0, 0, 0, 0)
 
+        # Комбобокс для выбора книги
         combo = QComboBox()
         combo.setEditable(True)
         combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         combo.addItems(self.books_list)
-
         completer = QCompleter(self.books_list)
         completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         combo.setCompleter(completer)
         combo.setCurrentText(initial_text)
         h_layout.addWidget(combo)
 
+        # Чекбокс для указания срока сдачи
+        check_due = QCheckBox("Указать срок сдачи")
+        if initial_date and initial_date.isValid():
+            check_due.setChecked(True)
+        else:
+            check_due.setChecked(False)
+        h_layout.addWidget(check_due)
+
+        # Поле выбора даты (QDateEdit)
         date_edit = QDateEdit()
         date_edit.setCalendarPopup(True)
         date_edit.setDisplayFormat("dd.MM.yyyy")
         if initial_date and initial_date.isValid():
             date_edit.setDate(initial_date)
+            date_edit.setVisible(True)
         else:
             date_edit.setDate(QDate.currentDate())
+            date_edit.setVisible(False)
         h_layout.addWidget(date_edit)
 
+        # При изменении состояния чекбокса показываем/скрываем QDateEdit
+        check_due.stateChanged.connect(lambda state: date_edit.setVisible(state == Qt.CheckState.Checked.value))
+
+        # Кнопка удаления
         delete_btn = QPushButton()
         trash_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon)
         delete_btn.setIcon(trash_icon)
@@ -166,7 +167,8 @@ class StudentDialog(QDialog):
         delete_btn.setFlat(True)
         h_layout.addWidget(delete_btn)
 
-        self.book_selectors.append((container, combo, date_edit, delete_btn))
+        # Записываем данные виджета, включая чекбокс
+        self.book_selectors.append((container, combo, check_due, date_edit, delete_btn))
         self.books_layout.addWidget(container)
 
         # По клику на кнопку удаления удаляем виджет (с задержкой 0 мс)
@@ -174,10 +176,7 @@ class StudentDialog(QDialog):
         self.update_delete_buttons()
 
     def remove_book_selector(self, container):
-        """
-        Удаляет одну строку (виджет) книги.
-        """
-        for i, (cont, combo, date_edit, delete_btn) in enumerate(self.book_selectors):
+        for i, (cont, combo, check_due, date_edit, delete_btn) in enumerate(self.book_selectors):
             if cont is container:
                 self.book_selectors.pop(i)
                 container.setParent(None)
@@ -186,22 +185,23 @@ class StudentDialog(QDialog):
         self.update_delete_buttons()
 
     def update_delete_buttons(self):
-        """
-        Если осталась только одна книга, кнопку "удалить" блокируем, чтобы всегда была хотя бы 1 запись.
-        """
         count = len(self.book_selectors)
-        for (container, combo, date_edit, delete_btn) in self.book_selectors:
+        for (container, combo, check_due, date_edit, delete_btn) in self.book_selectors:
             delete_btn.setEnabled(count > 1)
 
     def get_data(self):
         """
         Собирает данные из полей для передачи внешнему коду.
+        Если для книги срок сдачи не указан (чекбокс не установлен), due_date возвращается как пустая строка.
         """
         books = []
-        for (_, combo, date_edit, _) in self.book_selectors:
+        for (_, combo, check_due, date_edit, _) in self.book_selectors:
             book_text = combo.currentText().strip()
             if book_text:
-                due_date = date_edit.date().toString("dd.MM.yyyy")
+                if check_due.isChecked():
+                    due_date = date_edit.date().toString("dd.MM.yyyy")
+                else:
+                    due_date = ""
                 books.append({"book": book_text, "due_date": due_date})
         return {
             "last_name": self.last_name_edit.text().strip(),
@@ -211,3 +211,12 @@ class StudentDialog(QDialog):
             "parallel": self.parallel_combo.currentText(),
             "books": books
         }
+
+if __name__ == "__main__":
+    # Тестовый запуск диалога
+    from PyQt6.QtWidgets import QApplication
+    import sys
+    app = QApplication(sys.argv)
+    dlg = StudentDialog()
+    if dlg.exec() == QDialog.DialogCode.Accepted:
+        print(dlg.get_data())

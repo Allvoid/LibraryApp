@@ -1,10 +1,7 @@
 # library_app.py
 import sys
 import re
-from PyQt6.QtWidgets import (
-    QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QStackedWidget, QMessageBox,
-    QDialog
-)
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QStackedWidget, QMessageBox, QDialog
 from data.config_manager import load_config, save_config
 from pages.readers_page import ReadersPage
 from pages.books_page import BooksPage
@@ -69,22 +66,6 @@ class LibraryApp(QWidget):
         for i, btn in enumerate(self.menu_buttons):
             btn.setStyleSheet("background-color: lightblue; font-weight: bold;" if i == index else "")
 
-    # Пример вспомогательной функции для диалога подтверждения с кнопками "Да" и "Нет"
-    def ask_yes_no(self, title, text) -> bool:
-        """
-        Возвращает True, если пользователь нажал "Да".
-        Иначе (нажал "Нет" или закрыл окно) возвращает False.
-        """
-        msg_box = QMessageBox(self)
-        msg_box.setWindowTitle(title)
-        msg_box.setText(text)
-        # Добавляем 2 кастомные кнопки
-        yes_button = msg_box.addButton("Да", QMessageBox.ButtonRole.YesRole)
-        no_button = msg_box.addButton("Нет", QMessageBox.ButtonRole.NoRole)
-        msg_box.setDefaultButton(yes_button)  # По умолчанию фокус на "Да"
-        msg_box.exec()
-        return msg_box.clickedButton() == yes_button
-
     # Методы, вызываемые страницами.
     def add_student(self):
         from dialogs.student_dialog import StudentDialog
@@ -140,7 +121,14 @@ class LibraryApp(QWidget):
             self.readers_page.refresh()
 
     def clear_all_students(self):
-        if self.ask_yes_no("Подтверждение", "Вы действительно хотите очистить всех учеников?"):
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Подтверждение")
+        msg_box.setText("Вы действительно хотите очистить всех учеников?")
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        # Переводим кнопки
+        msg_box.button(QMessageBox.StandardButton.Yes).setText("Да")
+        msg_box.button(QMessageBox.StandardButton.No).setText("Нет")
+        if msg_box.exec() == QMessageBox.StandardButton.Yes:
             self.students = []
             save_students(self.students)
             self.students = load_students()
@@ -177,7 +165,13 @@ class LibraryApp(QWidget):
             self.update_books_table()
 
     def clear_all_books(self):
-        if self.ask_yes_no("Подтверждение", "Вы действительно хотите удалить все книги?"):
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Подтверждение")
+        msg_box.setText("Вы действительно хотите удалить все книги?")
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg_box.button(QMessageBox.StandardButton.Yes).setText("Да")
+        msg_box.button(QMessageBox.StandardButton.No).setText("Нет")
+        if msg_box.exec() == QMessageBox.StandardButton.Yes:
             self.books = []
             save_books(self.books)
             self.books = load_books()
@@ -186,6 +180,8 @@ class LibraryApp(QWidget):
     def shift_students(self):
         last_class = max(self.config.get("classes", []), key=lambda x: int(x))
         ambiguous_students = []
+        # Проходим по списку учеников; для однозначно переводимых учеников выполняем сдвиг,
+        # а для тех, кто находится в последнем классе или "9", добавляем в список неоднозначных.
         for st in self.students:
             cls = st.get("class", "")
             if not cls.isdigit():
@@ -200,11 +196,11 @@ class LibraryApp(QWidget):
             result = dlg.exec()
             if result == QDialog.DialogCode.Accepted:
                 self.students = [st for st in self.students if not st.get("to_delete", False)]
-                save_students(self.students)
-                self.students = load_students()
-                self.readers_page.reset_lazy_loading()
-                self.readers_page.refresh()
-            # Если нажато "Отмена", никаких обновлений не выполняется
+        # Вне зависимости от наличия неоднозначных учеников – сохраняем изменения и обновляем таблицу
+        save_students(self.students)
+        self.students = load_students()
+        self.readers_page.reset_lazy_loading()
+        self.readers_page.refresh()
 
     def add_class(self):
         new_class = self.config_page.new_class_edit.text().strip()
@@ -254,25 +250,20 @@ class LibraryApp(QWidget):
         return [f'{b.get("Title", "")} - {b.get("Author", "")}' for b in self.books]
 
     def validate_student_data(self, data):
-            """
-            Проверяет корректность ФИО: фамилия и имя обязательны, а отчество не обязательно.
-            Фамилия и имя должны содержать только буквы (и, возможно, дефис).
-            Если отчество указано, оно также должно содержать только буквы (и дефис).
-            """
-            if not (data["last_name"] and is_valid_name(data["last_name"])):
-                from PyQt6.QtWidgets import QMessageBox
-                QMessageBox.warning(self, "Ошибка ввода", "Фамилия должна содержать только буквы!")
-                return False
-            if not (data["first_name"] and is_valid_name(data["first_name"])):
-                from PyQt6.QtWidgets import QMessageBox
-                QMessageBox.warning(self, "Ошибка ввода", "Имя должно содержать только буквы!")
-                return False
-            # Отчество можно не указывать, но если введено – проверяем
-            if data["middle_name"] and not is_valid_name(data["middle_name"]):
-                from PyQt6.QtWidgets import QMessageBox
-                QMessageBox.warning(self, "Ошибка ввода", "Отчество должно содержать только буквы!")
-                return False
-            return True
+        if not (data["last_name"] and is_valid_name(data["last_name"])):
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Ошибка ввода", "Фамилия должна содержать только буквы!")
+            return False
+        if not (data["first_name"] and is_valid_name(data["first_name"])):
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Ошибка ввода", "Имя должно содержать только буквы!")
+            return False
+        # Отчество можно не указывать; если введено, проверяем его
+        if data["middle_name"] and not is_valid_name(data["middle_name"]):
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Ошибка ввода", "Отчество должно содержать только буквы!")
+            return False
+        return True
 
 if __name__ == "__main__":
     from PyQt6.QtWidgets import QApplication

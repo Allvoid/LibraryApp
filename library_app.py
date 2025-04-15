@@ -14,6 +14,20 @@ from data.books_manager import load_books, save_books
 from data.students_manager import load_students, save_students
 from utils import is_valid_name, check_issued_limits
 
+# Copyright 2025 Your Name
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 class LibraryApp(QWidget):
     def __init__(self):
         super().__init__()
@@ -240,13 +254,25 @@ class LibraryApp(QWidget):
         return [f'{b.get("Title", "")} - {b.get("Author", "")}' for b in self.books]
 
     def validate_student_data(self, data):
-        from PyQt6.QtWidgets import QMessageBox
-        if (not is_valid_name(data["last_name"]) or
-            not is_valid_name(data["first_name"]) or
-            not is_valid_name(data["middle_name"])):
-            QMessageBox.warning(self, "Ошибка ввода", "Фамилия, Имя и Отчество должны содержать только буквы!")
-            return False
-        return True
+            """
+            Проверяет корректность ФИО: фамилия и имя обязательны, а отчество не обязательно.
+            Фамилия и имя должны содержать только буквы (и, возможно, дефис).
+            Если отчество указано, оно также должно содержать только буквы (и дефис).
+            """
+            if not (data["last_name"] and is_valid_name(data["last_name"])):
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "Ошибка ввода", "Фамилия должна содержать только буквы!")
+                return False
+            if not (data["first_name"] and is_valid_name(data["first_name"])):
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "Ошибка ввода", "Имя должно содержать только буквы!")
+                return False
+            # Отчество можно не указывать, но если введено – проверяем
+            if data["middle_name"] and not is_valid_name(data["middle_name"]):
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "Ошибка ввода", "Отчество должно содержать только буквы!")
+                return False
+            return True
 
 if __name__ == "__main__":
     from PyQt6.QtWidgets import QApplication

@@ -6,6 +6,20 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer, QDate
 
+# Copyright 2025 Your Name
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 class StudentDialog(QDialog):
     def __init__(self, parent=None, student_data=None, books_list=None, classes_list=None, parallels_list=None):
         super().__init__(parent)
@@ -16,6 +30,8 @@ class StudentDialog(QDialog):
         self.book_selectors = []
         self.setWindowTitle("Редактировать ученика" if student_data else "Добавить ученика")
         self._init_ui()
+        # Устанавливаем увеличенный размер окна по умолчанию
+        self.resize(700, 400)
 
     def _init_ui(self):
         # Создаем главный вертикальный layout для всего диалога
@@ -39,7 +55,8 @@ class StudentDialog(QDialog):
 
         form_layout.addRow("Фамилия:", self.last_name_edit)
         form_layout.addRow("Имя:", self.first_name_edit)
-        form_layout.addRow("Отчество:", self.middle_name_edit)
+        # Изменили метку для отчества, чтобы указать, что поле необязательно
+        form_layout.addRow("Отчество (Необязательно):", self.middle_name_edit)
 
         # -------------------- Класс и Параллель --------------------
         self.class_combo = QComboBox()
@@ -53,13 +70,11 @@ class StudentDialog(QDialog):
         form_layout.addRow("Параллель:", self.parallel_combo)
 
         # -------------------- Список книг (прокрутка) --------------------
-        # Создаем отдельный виджет с вертикальным layout для книг
         self.books_widget = QWidget()
         self.books_layout = QVBoxLayout(self.books_widget)
         self.books_layout.setContentsMargins(0, 0, 0, 0)
         self.books_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        # QScrollArea для прокрутки списка книг
         self.books_scroll_area = QScrollArea()
         self.books_scroll_area.setWidgetResizable(True)
         self.books_scroll_area.setWidget(self.books_widget)
@@ -67,7 +82,6 @@ class StudentDialog(QDialog):
 
         form_layout.addRow("Книги:", self.books_scroll_area)
 
-        # Кнопка добавления новых книг
         add_book_btn = QPushButton("Добавить книгу")
         add_book_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         add_book_btn.clicked.connect(lambda: self.add_book_selector())
@@ -80,7 +94,6 @@ class StudentDialog(QDialog):
             self.middle_name_edit.setText(self.student_data.get("middle_name", ""))
             self.class_combo.setCurrentText(self.student_data.get("class", ""))
             self.parallel_combo.setCurrentText(self.student_data.get("parallel", ""))
-
             books = self.student_data.get("books", [])
             if books:
                 for bk in books:
@@ -117,15 +130,10 @@ class StudentDialog(QDialog):
         main_layout.addLayout(btn_layout)
 
     def add_book_selector(self, initial_text="", initial_date=None):
-        """
-        Добавляет одну строку (виджет) для выбора книги и, опционально, срока возврата.
-        Если чекбокс "Указать срок сдачи" не установлен, QDateEdit скрыт и срок не указывается.
-        """
         container = QWidget()
         h_layout = QHBoxLayout(container)
         h_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Комбобокс для выбора книги
         combo = QComboBox()
         combo.setEditable(True)
         combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -136,7 +144,6 @@ class StudentDialog(QDialog):
         combo.setCurrentText(initial_text)
         h_layout.addWidget(combo)
 
-        # Чекбокс для указания срока сдачи
         check_due = QCheckBox("Указать срок сдачи")
         if initial_date and initial_date.isValid():
             check_due.setChecked(True)
@@ -144,7 +151,6 @@ class StudentDialog(QDialog):
             check_due.setChecked(False)
         h_layout.addWidget(check_due)
 
-        # Поле выбора даты (QDateEdit)
         date_edit = QDateEdit()
         date_edit.setCalendarPopup(True)
         date_edit.setDisplayFormat("dd.MM.yyyy")
@@ -156,10 +162,8 @@ class StudentDialog(QDialog):
             date_edit.setVisible(False)
         h_layout.addWidget(date_edit)
 
-        # При изменении состояния чекбокса показываем/скрываем QDateEdit
         check_due.stateChanged.connect(lambda state: date_edit.setVisible(state == Qt.CheckState.Checked.value))
 
-        # Кнопка удаления
         delete_btn = QPushButton()
         trash_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon)
         delete_btn.setIcon(trash_icon)
@@ -167,11 +171,8 @@ class StudentDialog(QDialog):
         delete_btn.setFlat(True)
         h_layout.addWidget(delete_btn)
 
-        # Записываем данные виджета, включая чекбокс
         self.book_selectors.append((container, combo, check_due, date_edit, delete_btn))
         self.books_layout.addWidget(container)
-
-        # По клику на кнопку удаления удаляем виджет (с задержкой 0 мс)
         delete_btn.clicked.connect(lambda: QTimer.singleShot(0, lambda: self.remove_book_selector(container)))
         self.update_delete_buttons()
 
@@ -190,10 +191,6 @@ class StudentDialog(QDialog):
             delete_btn.setEnabled(count > 1)
 
     def get_data(self):
-        """
-        Собирает данные из полей для передачи внешнему коду.
-        Если для книги срок сдачи не указан (чекбокс не установлен), due_date возвращается как пустая строка.
-        """
         books = []
         for (_, combo, check_due, date_edit, _) in self.book_selectors:
             book_text = combo.currentText().strip()
@@ -213,7 +210,6 @@ class StudentDialog(QDialog):
         }
 
 if __name__ == "__main__":
-    # Тестовый запуск диалога
     from PyQt6.QtWidgets import QApplication
     import sys
     app = QApplication(sys.argv)

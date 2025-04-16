@@ -1,5 +1,5 @@
 # pages/books_page.py
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTableView, QPushButton, QHeaderView
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTableView, QPushButton, QHeaderView, QAbstractItemView
 from models.books_table_model import BooksTableModel
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QResizeEvent
@@ -25,7 +25,7 @@ class BooksPage(QWidget):
         self.books_page_size = 50
         self.current_books_loaded = 0
         self.prev_query = ""
-        self.loading = False  # флаг загрузки
+        self.loading = False  # Флаг загрузки
         self._init_ui()
         # Автоматическая проверка каждые 500 мс
         self.auto_timer = QTimer(self)
@@ -50,6 +50,8 @@ class BooksPage(QWidget):
         self.books_table_view.verticalHeader().setVisible(True)
         self.books_table_view.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         self.books_table_view.setSelectionMode(QTableView.SelectionMode.SingleSelection)
+        # Отключаем встроенное редактирование ячеек
+        self.books_table_view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         layout.addWidget(self.books_table_view)
         # Панель кнопок
         btn_layout = QHBoxLayout()
@@ -93,8 +95,7 @@ class BooksPage(QWidget):
             return
         self.loading = True
         query = self.book_search_edit.text().lower()
-        filtered = [bk for bk in self.app.books if (not query) or
-                    (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
+        filtered = [bk for bk in self.app.books if not query or (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
         if self.current_books_loaded < len(filtered):
             self.current_books_loaded += self.books_page_size
             if self.current_books_loaded > len(filtered):
@@ -104,8 +105,7 @@ class BooksPage(QWidget):
 
     def refresh(self):
         query = self.book_search_edit.text().lower()
-        filtered = [bk for bk in self.app.books if (not query) or
-                    (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
+        filtered = [bk for bk in self.app.books if not query or (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
         display_books = filtered[:self.current_books_loaded]
         self.books_model.updateBooks(display_books)
         total = len(filtered)
@@ -114,8 +114,7 @@ class BooksPage(QWidget):
 
     def check_and_load_more(self):
         query = self.book_search_edit.text().lower()
-        filtered = [bk for bk in self.app.books if (not query) or
-                    (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
+        filtered = [bk for bk in self.app.books if not query or (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
         if self.current_books_loaded < len(filtered):
             self.load_more()
 

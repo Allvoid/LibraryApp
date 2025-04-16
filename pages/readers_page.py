@@ -1,7 +1,7 @@
 # pages/readers_page.py
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QTableWidget,
-    QTableWidgetItem, QHeaderView, QPushButton
+    QTableWidgetItem, QHeaderView, QPushButton, QAbstractItemView
 )
 from PyQt6.QtCore import QDate, QTimer
 from PyQt6.QtGui import QColor, QResizeEvent
@@ -27,7 +27,7 @@ class ReadersPage(QWidget):
         self.readers_page_size = 50
         self.current_readers_loaded = 0
         self.prev_fio = ""
-        self.loading = False  # флаг загрузки
+        self.loading = False  # Флаг загрузки
         self._init_ui()
         # Авто-таймер, который каждые 500 мс проверяет необходимость подгрузки
         self.auto_timer = QTimer(self)
@@ -80,6 +80,8 @@ class ReadersPage(QWidget):
         )
         self.readers_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.readers_table.doubleClicked.connect(self.app.edit_student)
+        # Отключаем встроенное редактирование ячеек
+        self.readers_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         layout.addWidget(self.readers_table)
         # Подключаем автоматическую загрузку по скроллу (на всякий случай)
         self.readers_table.verticalScrollBar().valueChanged.connect(self.on_readers_scroll)

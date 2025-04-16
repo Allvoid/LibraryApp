@@ -1,24 +1,10 @@
 # dialogs/student_dialog.py
 from PyQt6.QtWidgets import (
-    QDialog, QFormLayout, QLineEdit, QComboBox, QCompleter, QSizePolicy,
+    QDialog, QFormLayout, QLineEdit, QComboBox, QSizePolicy,
     QPushButton, QWidget, QHBoxLayout, QDateEdit, QVBoxLayout, QStyle,
-    QScrollArea, QCheckBox
+    QScrollArea, QCheckBox, QCompleter, QMessageBox
 )
 from PyQt6.QtCore import Qt, QTimer, QDate
-
-# Copyright 2025 Your Name
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
 class StudentDialog(QDialog):
     def __init__(self, parent=None, student_data=None, books_list=None, classes_list=None, parallels_list=None):
@@ -30,8 +16,8 @@ class StudentDialog(QDialog):
         self.book_selectors = []
         self.setWindowTitle("Редактировать ученика" if student_data else "Добавить ученика")
         self._init_ui()
-        # Устанавливаем увеличенный размер окна по умолчанию
-        self.resize(700, 400)
+        self.resize(750, 400)
+
 
     def _init_ui(self):
         # Создаем главный вертикальный layout для всего диалога
@@ -46,16 +32,13 @@ class StudentDialog(QDialog):
         # -------------------- Поля ФИО --------------------
         self.last_name_edit = QLineEdit()
         self.last_name_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-
         self.first_name_edit = QLineEdit()
         self.first_name_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-
         self.middle_name_edit = QLineEdit()
         self.middle_name_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         form_layout.addRow("Фамилия:", self.last_name_edit)
         form_layout.addRow("Имя:", self.first_name_edit)
-        # Изменили метку для отчества, чтобы указать, что поле необязательно
         form_layout.addRow("Отчество (Необязательно):", self.middle_name_edit)
 
         # -------------------- Класс и Параллель --------------------
@@ -134,14 +117,30 @@ class StudentDialog(QDialog):
         h_layout = QHBoxLayout(container)
         h_layout.setContentsMargins(0, 0, 0, 0)
 
+        # Комбобокс с поиском (editable) и автодополнением
         combo = QComboBox()
         combo.setEditable(True)
+        combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        combo.addItems(self.books_list)
-        completer = QCompleter(self.books_list)
-        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        combo.setCompleter(completer)
-        combo.setCurrentText(initial_text)
+        if not self.books_list:
+            combo.addItem("Нет книг. Добавьте книги.")
+            combo.setEnabled(False)
+        else:
+            combo.addItems(self.books_list)
+            if initial_text:
+                idx = combo.findText(initial_text)
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+                else:
+                    combo.setCurrentIndex(0)
+            else:
+                # Если нет начального текста, оставляем поле пустым с подсказкой
+                combo.setCurrentIndex(-1)
+                if combo.lineEdit():
+                    combo.lineEdit().setPlaceholderText("Выберите книгу...")
+            completer = QCompleter(self.books_list)
+            completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+            combo.setCompleter(completer)
         h_layout.addWidget(combo)
 
         check_due = QCheckBox("Указать срок сдачи")
@@ -194,12 +193,16 @@ class StudentDialog(QDialog):
         books = []
         for (_, combo, check_due, date_edit, _) in self.book_selectors:
             book_text = combo.currentText().strip()
-            if book_text:
-                if check_due.isChecked():
-                    due_date = date_edit.date().toString("dd.MM.yyyy")
-                else:
-                    due_date = ""
-                books.append({"book": book_text, "due_date": due_date})
+            if book_text == "Нет книг. Добавьте книги.":
+                continue
+            # Если пустой – считаем, что книга не выбрана
+            if not book_text:
+                continue
+            if check_due.isChecked():
+                due_date = date_edit.date().toString("dd.MM.yyyy")
+            else:
+                due_date = ""
+            books.append({"book": book_text, "due_date": due_date})
         return {
             "last_name": self.last_name_edit.text().strip(),
             "first_name": self.first_name_edit.text().strip(),
@@ -209,10 +212,24 @@ class StudentDialog(QDialog):
             "books": books
         }
 
+    def accept(self):
+        data = self.get_data()
+        if not data.get("books"):
+            QMessageBox.warning(self, "Ошибка", "Не выбрана книга!\nПожалуйста, добавьте и выберите книгу.")
+            return
+        # Дополнительная проверка: выбранное значение должно быть в списке книг
+        for b in data["books"]:
+            if b["book"] not in self.books_list:
+                QMessageBox.warning(self, "Ошибка", f"Книга «{b['book']}» не найдена в списке!")
+                return
+        super().accept()
+
 if __name__ == "__main__":
     from PyQt6.QtWidgets import QApplication
     import sys
+    # Пример: создаем список книг из 100 элементов
+    books = [f"Книга {i} - Автор {i}" for i in range(1, 101)]
     app = QApplication(sys.argv)
-    dlg = StudentDialog()
+    dlg = StudentDialog(books_list=books)
     if dlg.exec() == QDialog.DialogCode.Accepted:
         print(dlg.get_data())

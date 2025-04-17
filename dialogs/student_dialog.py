@@ -6,20 +6,6 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer, QDate
 
-# Copyright 2025 Your Name
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 class StudentDialog(QDialog):
     def __init__(self, parent=None, student_data=None, books_list=None, classes_list=None, parallels_list=None):
         super().__init__(parent)
@@ -157,7 +143,7 @@ class StudentDialog(QDialog):
             combo.setCompleter(completer)
         h_layout.addWidget(combo)
 
-        check_due = QCheckBox("Указать срок сдачи")
+        check_due = QCheckBox("Указать дату выдачи")
         if initial_date and initial_date.isValid():
             check_due.setChecked(True)
         else:

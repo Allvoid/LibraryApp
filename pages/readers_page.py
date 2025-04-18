@@ -15,7 +15,7 @@ from PyQt6.QtGui import QResizeEvent
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
-# distributed under the License on an "AS IS" BASIS,
+# distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
@@ -50,19 +50,19 @@ class ReadersPage(QWidget):
         self.class_filter = QComboBox()
         self.class_filter.addItem("Все")
         self.class_filter.addItems(self.app.config.get("classes", []))
+        self.class_filter.currentTextChanged.connect(self.on_filters_changed)
         filters_layout.addWidget(self.class_filter)
         filters_layout.addWidget(QLabel("Параллель:"))
         self.parallel_filter = QComboBox()
         self.parallel_filter.addItem("Все")
         self.parallel_filter.addItems(self.app.config.get("parallels", []))
+        self.parallel_filter.currentTextChanged.connect(self.on_filters_changed)
         filters_layout.addWidget(self.parallel_filter)
         filters_layout.addWidget(QLabel("Сортировать по дате выдачи:"))
         self.due_date_filter = QComboBox()
         self.due_date_filter.addItems(["Все", "Ранние", "Поздние"])
-        filters_layout.addWidget(self.due_date_filter)
-        self.class_filter.currentTextChanged.connect(self.on_filters_changed)
-        self.parallel_filter.currentTextChanged.connect(self.on_filters_changed)
         self.due_date_filter.currentTextChanged.connect(self.on_filters_changed)
+        filters_layout.addWidget(self.due_date_filter)
         layout.addLayout(filters_layout)
         # Кнопки
         btn_layout = QHBoxLayout()
@@ -157,6 +157,8 @@ class ReadersPage(QWidget):
         return filtered if full else filtered[:self.current_readers_loaded]
 
     def refresh(self):
+        # Обновляем списки фильтров перед обновлением таблицы
+        self.refresh_filters()
         full = self.get_filtered_students(full=True)
         part = self.get_filtered_students(full=False)
         self.readers_table.setRowCount(0)
@@ -184,3 +186,26 @@ class ReadersPage(QWidget):
         dates = [b["due_date"] for b in data.get("books", [])]
         self.readers_table.setItem(row, 5, QTableWidgetItem(", ".join(books)))
         self.readers_table.setItem(row, 6, QTableWidgetItem(", ".join(dates)))
+
+    def refresh_filters(self):
+        # Сохраняем текущий выбор
+        current_class = self.class_filter.currentText()
+        classes = ["Все"] + self.app.config.get("classes", [])
+        self.class_filter.blockSignals(True)
+        self.class_filter.clear()
+        self.class_filter.addItems(classes)
+        if current_class in classes:
+            self.class_filter.setCurrentText(current_class)
+        else:
+            self.class_filter.setCurrentIndex(0)
+        self.class_filter.blockSignals(False)
+        current_parallel = self.parallel_filter.currentText()
+        parallels = ["Все"] + self.app.config.get("parallels", [])
+        self.parallel_filter.blockSignals(True)
+        self.parallel_filter.clear()
+        self.parallel_filter.addItems(parallels)
+        if current_parallel in parallels:
+            self.parallel_filter.setCurrentText(current_parallel)
+        else:
+            self.parallel_filter.setCurrentIndex(0)
+        self.parallel_filter.blockSignals(False)

@@ -206,6 +206,8 @@ class LibraryApp(QWidget):
         new_class = self.config_page.new_class_edit.text().strip()
         if new_class and new_class not in self.config.get("classes", []):
             self.config["classes"].append(new_class)
+            # Сортируем классы по возрастанию
+            self.config["classes"] = sorted(self.config["classes"], key=lambda x: int(x))
             save_config(self.config)
             self.config_page.refresh()
             self.readers_page.refresh()
@@ -226,6 +228,8 @@ class LibraryApp(QWidget):
         new_parallel = self.config_page.new_parallel_edit.text().strip()
         if new_parallel and new_parallel not in self.config.get("parallels", []):
             self.config["parallels"].append(new_parallel)
+            # Сортируем параллели по алфавиту
+            self.config["parallels"] = sorted(self.config["parallels"])
             save_config(self.config)
             self.config_page.refresh()
             self.readers_page.refresh()
@@ -261,7 +265,7 @@ class LibraryApp(QWidget):
         # Отчество можно не указывать; если введено, проверяем его
         if data["middle_name"] and not is_valid_name(data["middle_name"]):
             from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Ошибка ввода", "Отчество должно содержать только буквы!")
+            QMessageBox.warning(self, "Ошибка ввода", "Отчество должна содержать только буквы!")
             return False
         return True
 

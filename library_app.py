@@ -1,11 +1,13 @@
 # library_app.py
 import sys
 import re
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QStackedWidget, QMessageBox, QDialog
+from PyQt6.QtWidgets import (
+    QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QStackedWidget,
+    QMessageBox, QDialog
+)
 from data.config_manager import load_config, save_config
 from pages.readers_page import ReadersPage
 from pages.books_page import BooksPage
-import PyQt6.QtWidgets as QtWidgets
 from pages.config_page import ConfigPage
 from data.books_manager import load_books, save_books
 from data.students_manager import load_students, save_students
@@ -29,7 +31,10 @@ class LibraryApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Школьная библиотека")
-        self.setGeometry(100, 100, 900, 600)
+        # Увеличенный размер окна
+        self.setGeometry(100, 100, 1200, 800)
+        self.setMinimumSize(1200, 800)
+
         # Загружаем данные
         self.config = load_config()
         self.books = load_books()
@@ -51,7 +56,6 @@ class LibraryApp(QWidget):
         main_layout.addLayout(menu_layout)
 
         self.pages = QStackedWidget()
-        # Передаём self в качестве родителя страниц
         self.readers_page = ReadersPage(self)
         self.books_page = BooksPage(self)
         self.config_page = ConfigPage(self)
@@ -64,15 +68,19 @@ class LibraryApp(QWidget):
     def switch_page(self, index):
         self.pages.setCurrentIndex(index)
         for i, btn in enumerate(self.menu_buttons):
-            btn.setStyleSheet("background-color: lightblue; font-weight: bold;" if i == index else "")
+            btn.setStyleSheet(
+                "background-color: lightblue; font-weight: bold;" if i == index else ""
+            )
 
-    # Методы, вызываемые страницами.
     def add_student(self):
         from dialogs.student_dialog import StudentDialog
-        dlg = StudentDialog(self, student_data=None,
-                            books_list=self.get_books_display_list(),
-                            classes_list=self.config.get("classes", []),
-                            parallels_list=self.config.get("parallels", []))
+        dlg = StudentDialog(
+            parent=self,
+            student_data=None,
+            books_list=self.get_books_display_list(),
+            classes_list=self.config.get("classes", []),
+            parallels_list=self.config.get("parallels", [])
+        )
         if dlg.exec() == QDialog.DialogCode.Accepted:
             data = dlg.get_data()
             if not self.validate_student_data(data):
@@ -94,22 +102,21 @@ class LibraryApp(QWidget):
             return
         student = filtered[row]
         from dialogs.student_dialog import StudentDialog
-        dlg = StudentDialog(self, student_data=student,
-                            books_list=self.get_books_display_list(),
-                            classes_list=self.config.get("classes", []),
-                            parallels_list=self.config.get("parallels", []))
+        dlg = StudentDialog(
+            parent=self,
+            student_data=student,
+            books_list=self.get_books_display_list(),
+            classes_list=self.config.get("classes", []),
+            parallels_list=self.config.get("parallels", [])
+        )
         res = dlg.exec()
-        if res == 2:
-            self.students.remove(student)
-            save_students(self.students)
-            self.students = load_students()
-            self.readers_page.reset_lazy_loading()
-            self.readers_page.refresh()
-        elif res == QDialog.DialogCode.Accepted:
+        if res == QDialog.DialogCode.Accepted:
             new_data = dlg.get_data()
             if not self.validate_student_data(new_data):
                 return
-            valid, msg = check_issued_limits(new_data, self.students, self.books, exclude_student=student)
+            valid, msg = check_issued_limits(
+                new_data, self.students, self.books, exclude_student=student
+            )
             if not valid:
                 QMessageBox.warning(self, "Ошибка", msg)
                 return
@@ -119,13 +126,21 @@ class LibraryApp(QWidget):
             self.students = load_students()
             self.readers_page.reset_lazy_loading()
             self.readers_page.refresh()
+        elif res == 2:
+            # Удалить
+            self.students.remove(student)
+            save_students(self.students)
+            self.students = load_students()
+            self.readers_page.reset_lazy_loading()
+            self.readers_page.refresh()
 
     def clear_all_students(self):
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle("Подтверждение")
         msg_box.setText("Вы действительно хотите очистить всех учеников?")
-        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        # Переводим кнопки
+        msg_box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
         msg_box.button(QMessageBox.StandardButton.Yes).setText("Да")
         msg_box.button(QMessageBox.StandardButton.No).setText("Нет")
         if msg_box.exec() == QMessageBox.StandardButton.Yes:
@@ -146,7 +161,9 @@ class LibraryApp(QWidget):
                 self.books = load_books()
                 self.update_books_table()
             else:
-                QMessageBox.warning(self, "Ошибка", "Поля «Название» и «Автор» должны быть заполнены!")
+                QMessageBox.warning(
+                    self, "Ошибка", "Поля «Название» и «Автор» должны быть заполнены!"
+                )
 
     def delete_book(self):
         indexes = self.books_page.books_table_view.selectionModel().selectedRows()
@@ -155,8 +172,10 @@ class LibraryApp(QWidget):
             return
         row = indexes[0].row()
         query = self.books_page.book_search_edit.text().lower()
-        filtered = [bk for bk in self.books if (not query) or
-                    (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())]
+        filtered = [
+            bk for bk in self.books
+            if not query or (query in bk.get("Title", "").lower() or query in bk.get("Author", "").lower())
+        ]
         if row < len(filtered):
             book_to_delete = filtered[row]
             self.books.remove(book_to_delete)
@@ -168,7 +187,9 @@ class LibraryApp(QWidget):
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle("Подтверждение")
         msg_box.setText("Вы действительно хотите удалить все книги?")
-        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg_box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
         msg_box.button(QMessageBox.StandardButton.Yes).setText("Да")
         msg_box.button(QMessageBox.StandardButton.No).setText("Нет")
         if msg_box.exec() == QMessageBox.StandardButton.Yes:
@@ -180,8 +201,6 @@ class LibraryApp(QWidget):
     def shift_students(self):
         last_class = max(self.config.get("classes", []), key=lambda x: int(x))
         ambiguous_students = []
-        # Проходим по списку учеников; для однозначно переводимых учеников выполняем сдвиг,
-        # а для тех, кто находится в последнем классе или "9", добавляем в список неоднозначных.
         for st in self.students:
             cls = st.get("class", "")
             if not cls.isdigit():
@@ -193,10 +212,8 @@ class LibraryApp(QWidget):
         if ambiguous_students:
             from dialogs.ambiguous_shift_dialog import AmbiguousShiftDialog
             dlg = AmbiguousShiftDialog(ambiguous_students, last_class, parent=self)
-            result = dlg.exec()
-            if result == QDialog.DialogCode.Accepted:
+            if dlg.exec() == QDialog.DialogCode.Accepted:
                 self.students = [st for st in self.students if not st.get("to_delete", False)]
-        # Вне зависимости от наличия неоднозначных учеников – сохраняем изменения и обновляем таблицу
         save_students(self.students)
         self.students = load_students()
         self.readers_page.reset_lazy_loading()
@@ -206,8 +223,6 @@ class LibraryApp(QWidget):
         new_class = self.config_page.new_class_edit.text().strip()
         if new_class and new_class not in self.config.get("classes", []):
             self.config["classes"].append(new_class)
-            # Сортируем классы по возрастанию
-            self.config["classes"] = sorted(self.config["classes"], key=lambda x: int(x))
             save_config(self.config)
             self.config_page.refresh()
             self.readers_page.refresh()
@@ -228,8 +243,6 @@ class LibraryApp(QWidget):
         new_parallel = self.config_page.new_parallel_edit.text().strip()
         if new_parallel and new_parallel not in self.config.get("parallels", []):
             self.config["parallels"].append(new_parallel)
-            # Сортируем параллели по алфавиту
-            self.config["parallels"] = sorted(self.config["parallels"])
             save_config(self.config)
             self.config_page.refresh()
             self.readers_page.refresh()
@@ -255,17 +268,13 @@ class LibraryApp(QWidget):
 
     def validate_student_data(self, data):
         if not (data["last_name"] and is_valid_name(data["last_name"])):
-            from PyQt6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Ошибка ввода", "Фамилия должна содержать только буквы!")
             return False
         if not (data["first_name"] and is_valid_name(data["first_name"])):
-            from PyQt6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Ошибка ввода", "Имя должно содержать только буквы!")
             return False
-        # Отчество можно не указывать; если введено, проверяем его
-        if data["middle_name"] and not is_valid_name(data["middle_name"]):
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Ошибка ввода", "Отчество должна содержать только буквы!")
+        if (data["middle_name"] and not is_valid_name(data["middle_name"])):
+            QMessageBox.warning(self, "Ошибка ввода", "Отчество должно содержать только буквы!")
             return False
         return True
 

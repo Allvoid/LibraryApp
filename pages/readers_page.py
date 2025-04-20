@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QPushButton, QAbstractItemView
 )
 from PyQt6.QtCore import QTimer, QDate
-from PyQt6.QtGui import QResizeEvent
+from PyQt6.QtGui import QResizeEvent, QColor, QBrush
 
 # Copyright 2025 Your Name
 #
@@ -27,16 +27,15 @@ class ReadersPage(QWidget):
         self.readers_page_size = 50
         self.current_readers_loaded = 0
         self.prev_fio = ""
-        self.loading = False  # Флаг загрузки
+        self.loading = False
         self._init_ui()
-        # Авто‑таймер ленивой подгрузки
         self.auto_timer = QTimer(self)
         self.auto_timer.timeout.connect(self.check_and_load_more)
         self.auto_timer.start(500)
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
-        # Поисковая панель
+        # Поиск по ФИО
         search_layout = QHBoxLayout()
         search_layout.addWidget(QLabel("Поиск по ФИО:"))
         self.fio_search = QLineEdit()
@@ -44,7 +43,8 @@ class ReadersPage(QWidget):
         self.fio_search.textChanged.connect(self.on_filters_changed)
         search_layout.addWidget(self.fio_search)
         layout.addLayout(search_layout)
-        # Фильтры
+
+        # Фильтры и сортировка по дате
         filters_layout = QHBoxLayout()
         filters_layout.addWidget(QLabel("Класс:"))
         self.class_filter = QComboBox()
@@ -58,13 +58,20 @@ class ReadersPage(QWidget):
         self.parallel_filter.addItems(self.app.config.get("parallels", []))
         self.parallel_filter.currentTextChanged.connect(self.on_filters_changed)
         filters_layout.addWidget(self.parallel_filter)
-        filters_layout.addWidget(QLabel("Сортировать по дате выдачи:"))
+        filters_layout.addWidget(QLabel("По дате:"))
         self.due_date_filter = QComboBox()
-        self.due_date_filter.addItems(["Все", "Ранние", "Поздние"])
+        self.due_date_filter.addItems([
+            "Без сортировки и фильтров",
+            "Сортировать по недавним выдачам",
+            "Сортировать по старым выдачам",
+            "Отобразить только просроченные сдачи",
+            "Отобразить только не просроченные сдачи"
+        ])
         self.due_date_filter.currentTextChanged.connect(self.on_filters_changed)
         filters_layout.addWidget(self.due_date_filter)
         layout.addLayout(filters_layout)
-        # Кнопки
+
+        # Кнопки управления
         btn_layout = QHBoxLayout()
         add_student_btn = QPushButton("Добавить ученика")
         add_student_btn.clicked.connect(self.app.add_student)
@@ -73,45 +80,48 @@ class ReadersPage(QWidget):
         btn_layout.addWidget(add_student_btn)
         btn_layout.addWidget(clear_all_btn)
         layout.addLayout(btn_layout)
-        # Таблица учеников
+
+        # Таблица читателей
         self.readers_table = QTableWidget(0, 7)
-        self.readers_table.setHorizontalHeaderLabels(
-            ["Фамилия", "Имя", "Отчество", "Класс", "Параллель", "Книги", "Дата выдачи"]
-        )
-        self.readers_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.readers_table.setHorizontalHeaderLabels([
+            "Фамилия", "Имя", "Отчество", "Класс", "Параллель", "Книги", "Даты"
+        ])
+        header = self.readers_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
         self.readers_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.readers_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.readers_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.readers_table.doubleClicked.connect(self.app.edit_student)
         layout.addWidget(self.readers_table)
-        # Автозагрузка при скролле
-        self.readers_table.verticalScrollBar().valueChanged.connect(self.on_readers_scroll)
-        # Статус
+
+        # Статусная строка
         status_layout = QHBoxLayout()
         status_layout.addStretch()
         self.readers_status_label = QLabel("Читателей: 0/0")
         status_layout.addWidget(self.readers_status_label)
         layout.addLayout(status_layout)
+
         # Инициализация
         self.prev_fio = self.fio_search.text().lower()
         self.current_readers_loaded = self.readers_page_size
         self.refresh()
 
     def reset_lazy_loading(self):
-        """Для совместимости с вызовом из LibraryApp.add_student."""
         self.current_readers_loaded = self.readers_page_size
         self.refresh()
 
     def on_filters_changed(self):
-        current_fio = self.fio_search.text().lower()
-        if current_fio != self.prev_fio:
-            self.prev_fio = current_fio
+        current = self.fio_search.text().lower()
+        if current != self.prev_fio:
+            self.prev_fio = current
             self.current_readers_loaded = self.readers_page_size
         self.refresh()
 
     def on_readers_scroll(self, value):
-        scrollbar = self.readers_table.verticalScrollBar()
-        if value == scrollbar.maximum():
+        if value == self.readers_table.verticalScrollBar().maximum():
             self.load_more()
 
     def load_more(self):
@@ -121,51 +131,80 @@ class ReadersPage(QWidget):
         full = self.get_filtered_students(full=True)
         if self.current_readers_loaded < len(full):
             self.current_readers_loaded += self.readers_page_size
-            if self.current_readers_loaded > len(full):
-                self.current_readers_loaded = len(full)
+            self.current_readers_loaded = min(self.current_readers_loaded, len(full))
             self.refresh()
         self.loading = False
 
     def get_filtered_students(self, full=False):
-        selected_class = self.class_filter.currentText()
-        selected_parallel = self.parallel_filter.currentText()
-        fio_query = self.fio_search.text().lower()
-        filtered = []
-        for st in self.app.students:
-            if selected_class != "Все" and st.get("class", "") != selected_class:
+        cls_sel = self.class_filter.currentText()
+        par_sel = self.parallel_filter.currentText()
+        query = self.fio_search.text().lower()
+        # Фильтрация по ФИО, классу, параллели
+        students = []
+        for s in self.app.students:
+            if cls_sel != "Все" and s.get("class", "") != cls_sel:
                 continue
-            if selected_parallel != "Все" and st.get("parallel", "") != selected_parallel:
+            if par_sel != "Все" and s.get("parallel", "") != par_sel:
                 continue
-            if fio_query and not (
-                fio_query in st.get("last_name", "").lower() or
-                fio_query in st.get("first_name", "").lower() or
-                fio_query in st.get("middle_name", "").lower()
+            if query and not (
+                query in s.get("last_name", "").lower() or
+                query in s.get("first_name", "").lower() or
+                query in s.get("middle_name", "").lower()
             ):
                 continue
-            filtered.append(st)
-        # Сортировка по дате выдачи
-        if self.due_date_filter.currentText() == "Ранние":
-            filtered.sort(key=lambda s: min(
-                [QDate.fromString(b["due_date"], "dd.MM.yyyy") for b in s.get("books", [])
-                 if QDate.fromString(b["due_date"], "dd.MM.yyyy").isValid()] or [QDate.currentDate()]
-            ))
-        elif self.due_date_filter.currentText() == "Поздние":
-            filtered.sort(key=lambda s: max(
-                [QDate.fromString(b["due_date"], "dd.MM.yyyy") for b in s.get("books", [])
-                 if QDate.fromString(b["due_date"], "dd.MM.yyyy").isValid()] or [QDate.currentDate()]
-            ), reverse=True)
-        return filtered if full else filtered[:self.current_readers_loaded]
+            students.append(s)
+        mode = self.due_date_filter.currentText()
+        today = QDate.currentDate()
+        # Без сортировки и фильтров
+        if mode == "Без сортировки и фильтров":
+            result = students
+        else:
+            # Отбираем записи с любыми датами
+            with_dates = []
+            for s in students:
+                if any(b.get("issue_date") or b.get("return_date") for b in s.get("books", [])):
+                    with_dates.append(s)
+            # Применяем режим
+            if mode == "Сортировать по недавним выдачам":
+                with_dates.sort(key=lambda st: max(
+                    [QDate.fromString(b.get("issue_date", ""), "dd.MM.yyyy") for b in st.get("books", [])
+                     if QDate.fromString(b.get("issue_date", ""), "dd.MM.yyyy").isValid()]
+                    or [today]
+                ), reverse=True)
+            elif mode == "Сортировать по старым выдачам":
+                with_dates.sort(key=lambda st: min(
+                    [QDate.fromString(b.get("issue_date", ""), "dd.MM.yyyy") for b in st.get("books", [])
+                     if QDate.fromString(b.get("issue_date", ""), "dd.MM.yyyy").isValid()]
+                    or [today]
+                ))
+            elif mode == "Отобразить только просроченные сдачи":
+                with_dates = [st for st in with_dates if any(
+                    QDate.fromString(b.get("return_date", ""), "dd.MM.yyyy").isValid() and
+                    QDate.fromString(b.get("return_date", ""), "dd.MM.yyyy") < today
+                    for b in st.get("books", [])
+                )]
+            elif mode == "Отобразить только не просроченные сдачи":
+                with_dates = [st for st in with_dates if any(
+                    QDate.fromString(b.get("return_date", ""), "dd.MM.yyyy").isValid()
+                    for b in st.get("books", [])
+                ) and all(
+                    not (QDate.fromString(b.get("return_date", ""), "dd.MM.yyyy").isValid() and
+                         QDate.fromString(b.get("return_date", ""), "dd.MM.yyyy") < today)
+                    for b in st.get("books", [])
+                )]
+            result = with_dates
+        return result if full else result[:self.current_readers_loaded]
 
     def refresh(self):
-        # Обновляем списки фильтров перед обновлением таблицы
+        self.readers_table.clearSpans()
         self.refresh_filters()
         full = self.get_filtered_students(full=True)
         part = self.get_filtered_students(full=False)
         self.readers_table.setRowCount(0)
-        for st in part:
+        for s in part:
             row = self.readers_table.rowCount()
             self.readers_table.insertRow(row)
-            self.set_student_row(row, st)
+            self.set_student_row(row, s)
         self.readers_status_label.setText(f"Читателей: {len(part)}/{len(full)}")
 
     def check_and_load_more(self):
@@ -177,35 +216,51 @@ class ReadersPage(QWidget):
         QTimer.singleShot(0, self.check_and_load_more)
 
     def set_student_row(self, row, data):
-        self.readers_table.setItem(row, 0, QTableWidgetItem(data["last_name"]))
-        self.readers_table.setItem(row, 1, QTableWidgetItem(data["first_name"]))
-        self.readers_table.setItem(row, 2, QTableWidgetItem(data.get("middle_name", "")))
-        self.readers_table.setItem(row, 3, QTableWidgetItem(data["class"]))
-        self.readers_table.setItem(row, 4, QTableWidgetItem(data["parallel"]))
-        books = [b["book"] for b in data.get("books", [])]
-        dates = [b["due_date"] for b in data.get("books", [])]
+        # Основные поля
+        for i, key in enumerate(["last_name", "first_name", "middle_name", "class", "parallel"]):
+            self.readers_table.setItem(row, i, QTableWidgetItem(data.get(key, "")))
+        # Книги
+        books = [b.get("book", "") for b in data.get("books", [])]
         self.readers_table.setItem(row, 5, QTableWidgetItem(", ".join(books)))
-        self.readers_table.setItem(row, 6, QTableWidgetItem(", ".join(dates)))
+        # Даты и подсветка просрочек
+        date_lines = []
+        overdue = False
+        today = QDate.currentDate()
+        for b in data.get("books", []):
+            issue = b.get("issue_date", "")
+            ret = b.get("return_date", "")
+            if issue and ret:
+                date_lines.append(f"{issue} - {ret}")
+            elif issue:
+                date_lines.append(f"{issue} (выдана)")
+            elif ret:
+                date_lines.append(f"{ret} (сдача)")
+            if ret:
+                rd = QDate.fromString(ret, "dd.MM.yyyy")
+                if rd.isValid() and rd < today:
+                    overdue = True
+        if not date_lines:
+            self.readers_table.setSpan(row, 5, 1, 2)
+        item_date = QTableWidgetItem("\n".join(date_lines))
+        self.readers_table.setItem(row, 6, item_date)
+        if overdue:
+            for col in range(self.readers_table.columnCount()):
+                cell = self.readers_table.item(row, col)
+                if cell:
+                    cell.setBackground(QBrush(QColor('#ffa0a0')))
 
     def refresh_filters(self):
-        # Сохраняем текущий выбор
-        current_class = self.class_filter.currentText()
+        cur_cls = self.class_filter.currentText()
         classes = ["Все"] + self.app.config.get("classes", [])
         self.class_filter.blockSignals(True)
         self.class_filter.clear()
         self.class_filter.addItems(classes)
-        if current_class in classes:
-            self.class_filter.setCurrentText(current_class)
-        else:
-            self.class_filter.setCurrentIndex(0)
+        self.class_filter.setCurrentText(cur_cls if cur_cls in classes else "Все")
         self.class_filter.blockSignals(False)
-        current_parallel = self.parallel_filter.currentText()
-        parallels = ["Все"] + self.app.config.get("parallels", [])
+        cur_par = self.parallel_filter.currentText()
+        pars = ["Все"] + self.app.config.get("parallels", [])
         self.parallel_filter.blockSignals(True)
         self.parallel_filter.clear()
-        self.parallel_filter.addItems(parallels)
-        if current_parallel in parallels:
-            self.parallel_filter.setCurrentText(current_parallel)
-        else:
-            self.parallel_filter.setCurrentIndex(0)
+        self.parallel_filter.addItems(pars)
+        self.parallel_filter.setCurrentText(cur_par if cur_par in pars else "Все")
         self.parallel_filter.blockSignals(False)

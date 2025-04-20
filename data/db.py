@@ -26,6 +26,7 @@ def get_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+
 def init_db():
     conn = get_connection()
     cursor = conn.cursor()
@@ -35,7 +36,8 @@ def init_db():
         key TEXT PRIMARY KEY,
         value TEXT
     )
-    """)
+    """
+    )
     # Таблица для книг
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS books (
@@ -44,7 +46,8 @@ def init_db():
         author TEXT NOT NULL,
         quantity INTEGER
     )
-    """)
+    """
+    )
     # Таблица для учеников
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS students (
@@ -55,17 +58,25 @@ def init_db():
         class TEXT NOT NULL,
         parallel TEXT NOT NULL
     )
-    """)
-    # Таблица для связи учеников и книг (выдача)
+    """
+    )
+    # Таблица для связи учеников и книг (выдача и возврат)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS student_books (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id INTEGER NOT NULL,
         book_id INTEGER NOT NULL,
         due_date TEXT NOT NULL,
+        return_date TEXT,
         FOREIGN KEY(student_id) REFERENCES students(id),
         FOREIGN KEY(book_id) REFERENCES books(id)
     )
-    """)
+    """
+    )
+    # Миграция: добавляем колонку return_date, если её нет
+    cursor.execute("PRAGMA table_info(student_books)")
+    cols = [row[1] for row in cursor.fetchall()]
+    if 'return_date' not in cols:
+        cursor.execute("ALTER TABLE student_books ADD COLUMN return_date TEXT")
     conn.commit()
     conn.close()

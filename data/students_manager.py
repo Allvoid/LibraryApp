@@ -30,7 +30,7 @@ init_db()
 def load_students():
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM students")
+    cursor.execute("SELECT id, last_name, first_name, class, parallel FROM students")
     student_rows = cursor.fetchall()
     students = []
     for row in student_rows:
@@ -38,7 +38,6 @@ def load_students():
             "id": row["id"],
             "last_name": row["last_name"],
             "first_name": row["first_name"],
-            "middle_name": row["middle_name"],
             "class": row["class"],
             "parallel": row["parallel"],
             "books": []
@@ -55,7 +54,7 @@ def load_students():
         book_rows = cursor.fetchall()
         for brow in book_rows:
             due_iso = brow["due_date"]
-            return_iso = brow["return_date"] if "return_date" in brow.keys() else None
+            return_iso = brow["return_date"]
             issue_date = ""
             return_date = ""
             if due_iso:
@@ -90,11 +89,11 @@ def save_students(students):
             cursor.execute(
                 """
                 UPDATE students
-                SET last_name = ?, first_name = ?, middle_name = ?, class = ?, parallel = ?
+                SET last_name = ?, first_name = ?, class = ?, parallel = ?
                 WHERE id = ?
                 """,
                 (
-                    student["last_name"], student["first_name"], student["middle_name"],
+                    student["last_name"], student["first_name"],
                     student["class"], student["parallel"], student["id"]
                 )
             )
@@ -106,13 +105,17 @@ def save_students(students):
                 VALUES (?, ?, ?, ?, ?)
                 """,
                 (
-                    student["last_name"], student["first_name"], student["middle_name"],
-                    student["class"], student["parallel"]
+                    student["last_name"],
+                    student["first_name"],
+                    "",  # middle_name теперь всегда пустая строка
+                    student["class"],
+                    student["parallel"],
                 )
             )
             sid = cursor.lastrowid
             student["id"] = sid
         new_ids.add(sid)
+
         # Сбрасываем старые записи выдачи
         cursor.execute("DELETE FROM student_books WHERE student_id = ?", (sid,))
         # Обрабатываем книги студента
@@ -127,6 +130,7 @@ def save_students(students):
             issue_iso = qd.toString("yyyy-MM-dd") if qd.isValid() else None
             qr = QDate.fromString(return_str, "dd.MM.yyyy")
             return_iso = qr.toString("yyyy-MM-dd") if qr.isValid() else None
+
             # Ищем книгу в библиотеке
             cursor.execute(
                 "SELECT id FROM books WHERE title || ' - ' || author = ?",
@@ -146,6 +150,7 @@ def save_students(students):
                     (title.strip(), author.strip(), None)
                 )
                 book_id = cursor.lastrowid
+
             # Вставляем запись выдачи
             cursor.execute(
                 """

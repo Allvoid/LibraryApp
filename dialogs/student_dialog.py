@@ -45,10 +45,8 @@ class StudentDialog(QDialog):
         # --- ФИО ---
         self.last_name_edit = QLineEdit()
         self.first_name_edit = QLineEdit()
-        self.middle_name_edit = QLineEdit()
         form_layout.addRow("Фамилия:", self.last_name_edit)
         form_layout.addRow("Имя:", self.first_name_edit)
-        form_layout.addRow("Отчество (Необязательно):", self.middle_name_edit)
 
         # --- Класс и параллель ---
         self.class_combo = QComboBox()
@@ -76,7 +74,6 @@ class StudentDialog(QDialog):
         if self.student_data:
             self.last_name_edit.setText(self.student_data.get("last_name", ""))
             self.first_name_edit.setText(self.student_data.get("first_name", ""))
-            self.middle_name_edit.setText(self.student_data.get("middle_name", ""))
             self.class_combo.setCurrentText(self.student_data.get("class", ""))
             self.parallel_combo.setCurrentText(self.student_data.get("parallel", ""))
             for bk in self.student_data.get("books", []):
@@ -226,7 +223,6 @@ class StudentDialog(QDialog):
         return {
             "last_name": self.last_name_edit.text().strip(),
             "first_name": self.first_name_edit.text().strip(),
-            "middle_name": self.middle_name_edit.text().strip(),
             "class": self.class_combo.currentText(),
             "parallel": self.parallel_combo.currentText(),
             "books": books

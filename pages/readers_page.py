@@ -26,7 +26,7 @@ class ReadersPage(QWidget):
         self.app = app
         self.readers_page_size = 50
         self.current_readers_loaded = 0
-        self.prev_fio = ""
+        self.prev_query = ""
         self.loading = False
         self._init_ui()
         self.auto_timer = QTimer(self)
@@ -35,13 +35,13 @@ class ReadersPage(QWidget):
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
-        # Поиск по ФИО
+        # Поиск по фамилии и имени
         search_layout = QHBoxLayout()
-        search_layout.addWidget(QLabel("Поиск по ФИО:"))
-        self.fio_search = QLineEdit()
-        self.fio_search.setPlaceholderText("Введите ФИО...")
-        self.fio_search.textChanged.connect(self.on_filters_changed)
-        search_layout.addWidget(self.fio_search)
+        search_layout.addWidget(QLabel("Поиск по Фамилии и Имени:"))
+        self.name_search = QLineEdit()
+        self.name_search.setPlaceholderText("Введите фамилию или имя...")
+        self.name_search.textChanged.connect(self.on_filters_changed)
+        search_layout.addWidget(self.name_search)
         layout.addLayout(search_layout)
 
         # Фильтры и сортировка по дате
@@ -82,15 +82,20 @@ class ReadersPage(QWidget):
         layout.addLayout(btn_layout)
 
         # Таблица читателей
-        self.readers_table = QTableWidget(0, 7)
+        self.readers_table = QTableWidget(0, 6)
         self.readers_table.setHorizontalHeaderLabels([
-            "Фамилия", "Имя", "Отчество", "Класс", "Параллель", "Книги", "Даты"
+            "Фамилия", "Имя", "Класс", "Параллель", "Книги", "Даты"
         ])
         header = self.readers_table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        # Настройка ширины колонок: фамилия и имя интерактивные с заданной шириной, книги растягиваются
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
+        header.resizeSection(0, 150)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        header.resizeSection(1, 150)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         self.readers_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.readers_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.readers_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -104,8 +109,7 @@ class ReadersPage(QWidget):
         status_layout.addWidget(self.readers_status_label)
         layout.addLayout(status_layout)
 
-        # Инициализация
-        self.prev_fio = self.fio_search.text().lower()
+        self.prev_query = self.name_search.text().lower()
         self.current_readers_loaded = self.readers_page_size
         self.refresh()
 
@@ -114,9 +118,9 @@ class ReadersPage(QWidget):
         self.refresh()
 
     def on_filters_changed(self):
-        current = self.fio_search.text().lower()
-        if current != self.prev_fio:
-            self.prev_fio = current
+        current = self.name_search.text().lower()
+        if current != self.prev_query:
+            self.prev_query = current
             self.current_readers_loaded = self.readers_page_size
         self.refresh()
 
@@ -130,16 +134,17 @@ class ReadersPage(QWidget):
         self.loading = True
         full = self.get_filtered_students(full=True)
         if self.current_readers_loaded < len(full):
-            self.current_readers_loaded += self.readers_page_size
-            self.current_readers_loaded = min(self.current_readers_loaded, len(full))
+            self.current_readers_loaded = min(
+                self.current_readers_loaded + self.readers_page_size,
+                len(full)
+            )
             self.refresh()
         self.loading = False
 
     def get_filtered_students(self, full=False):
         cls_sel = self.class_filter.currentText()
         par_sel = self.parallel_filter.currentText()
-        query = self.fio_search.text().lower()
-        # Фильтрация по ФИО, классу, параллели
+        query = self.name_search.text().lower()
         students = []
         for s in self.app.students:
             if cls_sel != "Все" and s.get("class", "") != cls_sel:
@@ -148,48 +153,43 @@ class ReadersPage(QWidget):
                 continue
             if query and not (
                 query in s.get("last_name", "").lower() or
-                query in s.get("first_name", "").lower() or
-                query in s.get("middle_name", "").lower()
+                query in s.get("first_name", "").lower()
             ):
                 continue
             students.append(s)
         mode = self.due_date_filter.currentText()
         today = QDate.currentDate()
-        # Без сортировки и фильтров
         if mode == "Без сортировки и фильтров":
             result = students
         else:
-            # Отбираем записи с любыми датами
-            with_dates = []
-            for s in students:
-                if any(b.get("issue_date") or b.get("return_date") for b in s.get("books", [])):
-                    with_dates.append(s)
-            # Применяем режим
+            with_dates = [st for st in students if any(
+                b.get("issue_date") or b.get("return_date") for b in st.get("books", [])
+            )]
             if mode == "Сортировать по недавним выдачам":
                 with_dates.sort(key=lambda st: max(
-                    [QDate.fromString(b.get("issue_date", ""), "dd.MM.yyyy") for b in st.get("books", [])
-                     if QDate.fromString(b.get("issue_date", ""), "dd.MM.yyyy").isValid()]
+                    [QDate.fromString(b.get("issue_date"), "dd.MM.yyyy")
+                     for b in st.get("books", []) if QDate.fromString(b.get("issue_date"), "dd.MM.yyyy").isValid()]
                     or [today]
                 ), reverse=True)
             elif mode == "Сортировать по старым выдачам":
                 with_dates.sort(key=lambda st: min(
-                    [QDate.fromString(b.get("issue_date", ""), "dd.MM.yyyy") for b in st.get("books", [])
-                     if QDate.fromString(b.get("issue_date", ""), "dd.MM.yyyy").isValid()]
+                    [QDate.fromString(b.get("issue_date"), "dd.MM.yyyy")
+                     for b in st.get("books", []) if QDate.fromString(b.get("issue_date"), "dd.MM.yyyy").isValid()]
                     or [today]
                 ))
             elif mode == "Отобразить только просроченные сдачи":
                 with_dates = [st for st in with_dates if any(
-                    QDate.fromString(b.get("return_date", ""), "dd.MM.yyyy").isValid() and
-                    QDate.fromString(b.get("return_date", ""), "dd.MM.yyyy") < today
+                    (QDate.fromString(b.get("return_date"), "dd.MM.yyyy").isValid() and
+                     QDate.fromString(b.get("return_date"), "dd.MM.yyyy") < today)
                     for b in st.get("books", [])
                 )]
             elif mode == "Отобразить только не просроченные сдачи":
                 with_dates = [st for st in with_dates if any(
-                    QDate.fromString(b.get("return_date", ""), "dd.MM.yyyy").isValid()
+                    QDate.fromString(b.get("return_date"), "dd.MM.yyyy").isValid()
                     for b in st.get("books", [])
                 ) and all(
-                    not (QDate.fromString(b.get("return_date", ""), "dd.MM.yyyy").isValid() and
-                         QDate.fromString(b.get("return_date", ""), "dd.MM.yyyy") < today)
+                    not (QDate.fromString(b.get("return_date"), "dd.MM.yyyy").isValid() and
+                         QDate.fromString(b.get("return_date"), "dd.MM.yyyy") < today)
                     for b in st.get("books", [])
                 )]
             result = with_dates
@@ -216,13 +216,10 @@ class ReadersPage(QWidget):
         QTimer.singleShot(0, self.check_and_load_more)
 
     def set_student_row(self, row, data):
-        # Основные поля
-        for i, key in enumerate(["last_name", "first_name", "middle_name", "class", "parallel"]):
+        for i, key in enumerate(["last_name", "first_name", "class", "parallel"]):
             self.readers_table.setItem(row, i, QTableWidgetItem(data.get(key, "")))
-        # Книги
         books = [b.get("book", "") for b in data.get("books", [])]
-        self.readers_table.setItem(row, 5, QTableWidgetItem(", ".join(books)))
-        # Даты и подсветка просрочек
+        self.readers_table.setItem(row, 4, QTableWidgetItem(", ".join(books)))
         date_lines = []
         overdue = False
         today = QDate.currentDate()
@@ -239,10 +236,8 @@ class ReadersPage(QWidget):
                 rd = QDate.fromString(ret, "dd.MM.yyyy")
                 if rd.isValid() and rd < today:
                     overdue = True
-        if not date_lines:
-            self.readers_table.setSpan(row, 5, 1, 2)
         item_date = QTableWidgetItem("\n".join(date_lines))
-        self.readers_table.setItem(row, 6, item_date)
+        self.readers_table.setItem(row, 5, item_date)
         if overdue:
             for col in range(self.readers_table.columnCount()):
                 cell = self.readers_table.item(row, col)

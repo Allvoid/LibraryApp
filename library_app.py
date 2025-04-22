@@ -267,16 +267,13 @@ class LibraryApp(QWidget):
         return [f'{b.get("Title", "")} - {b.get("Author", "")}' for b in self.books]
 
     def validate_student_data(self, data):
-        if not (data["last_name"] and is_valid_name(data["last_name"])):
-            QMessageBox.warning(self, "Ошибка ввода", "Фамилия должна содержать только буквы!")
-            return False
-        if not (data["first_name"] and is_valid_name(data["first_name"])):
-            QMessageBox.warning(self, "Ошибка ввода", "Имя должно содержать только буквы!")
-            return False
-        if (data["middle_name"] and not is_valid_name(data["middle_name"])):
-            QMessageBox.warning(self, "Ошибка ввода", "Отчество должно содержать только буквы!")
-            return False
-        return True
+            if not (data["last_name"] and is_valid_name(data["last_name"])):
+                QMessageBox.warning(self, "Ошибка ввода", "Фамилия должна содержать только буквы!")
+                return False
+            if not (data["first_name"] and is_valid_name(data["first_name"])):
+                QMessageBox.warning(self, "Ошибка ввода", "Имя должно содержать только буквы!")
+                return False
+            return True
 
 if __name__ == "__main__":
     from PyQt6.QtWidgets import QApplication

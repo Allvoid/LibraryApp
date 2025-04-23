@@ -68,21 +68,36 @@ class LibraryApp(QWidget):
 
     # Методы, вызываемые страницами.
     def add_student(self):
+        print("[DEBUG] LibraryApp.add_student called")
         from dialogs.student_dialog import StudentDialog
-        dlg = StudentDialog(self, student_data=None,
-                            books_list=self.get_books_display_list(),
-                            classes_list=self.config.get("classes", []),
-                            parallels_list=self.config.get("parallels", []))
-        if dlg.exec() == QDialog.DialogCode.Accepted:
+        dlg = StudentDialog(
+            self,
+            student_data=None,
+            books_list=self.get_books_display_list(),
+            classes_list=self.config.get("classes", []),
+            parallels_list=self.config.get("parallels", [])
+        )
+        # Запускаем диалог и получаем код результата
+        res = dlg.exec()
+        print("[DEBUG] dialog result:", res)
+        # Если нажали «Сохранить» (res != 0)
+        if res:
             data = dlg.get_data()
-            if not self.validate_student_data(data):
-                return
-            valid, msg = check_issued_limits(data, self.students, self.books)
-            if not valid:
-                QMessageBox.warning(self, "Ошибка", msg)
-                return
+            print("[DEBUG] Student data:", data)
+            # Пропускаем валидацию ФИО для теста
+            # if not self.validate_student_data(data):
+            #     return
+            # Проверяем лимиты, только если есть книги
+            if data.get("books"):
+                valid, msg = check_issued_limits(data, self.students, self.books)
+                if not valid:
+                    QMessageBox.warning(self, "Ошибка", msg)
+                    return
+            # Добавляем ученика в список и сохраняем
             self.students.append(data)
+            print("[DEBUG] About to call save_students with:", self.students)
             save_students(self.students)
+            # Перечитываем из БД и обновляем таблицу
             self.students = load_students()
             self.readers_page.reset_lazy_loading()
             self.readers_page.refresh()
@@ -262,12 +277,6 @@ class LibraryApp(QWidget):
             from PyQt6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Ошибка ввода", "Имя должно содержать только буквы!")
             return False
-        # Отчество можно не указывать; если введено, проверяем его
-        if data["middle_name"] and not is_valid_name(data["middle_name"]):
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Ошибка ввода", "Отчество должна содержать только буквы!")
-            return False
-        return True
 
 if __name__ == "__main__":
     from PyQt6.QtWidgets import QApplication

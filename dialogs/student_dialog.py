@@ -2,7 +2,7 @@
 from PyQt6.QtWidgets import (
     QDialog, QFormLayout, QLineEdit, QComboBox, QSizePolicy,
     QPushButton, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QDateEdit,
-    QScrollArea, QCompleter, QMessageBox, QStyle
+    QScrollArea, QCompleter, QMessageBox, QStyle, QCheckBox
 )
 from PyQt6.QtCore import Qt, QDate
 
@@ -82,6 +82,7 @@ class StudentDialog(QDialog):
             for bk in self.student_data.get("books", []):
                 issue = bk.get("issue_date", "")
                 ret = bk.get("return_date", "")
+                returned = bk.get("returned", False)
                 option_text = (
                     "Указать дату выдачи и сдачи" if issue and ret else
                     "Указать дату выдачи" if issue else
@@ -94,7 +95,8 @@ class StudentDialog(QDialog):
                     initial_text=bk.get("book", ""),
                     initial_option=option_text,
                     initial_issue=issue_date,
-                    initial_return=return_date
+                    initial_return=return_date,
+                    initial_returned=returned
                 )
         else:
             self.add_book_selector()
@@ -117,23 +119,20 @@ class StudentDialog(QDialog):
         main_layout.addLayout(btn_layout)
 
     def add_book_selector(self, initial_text="", initial_option="Не указывать даты",
-                          initial_issue=None, initial_return=None):
+                          initial_issue=None, initial_return=None, initial_returned=False):
         """
-        Добавляет селектор для книги с возможностью ввода новой записи.
+        Добавляет селектор для книги с возможностью ввода новой записи, чекбоксом "Сдана" и поддержкой начального состояния.
         """
         container = QWidget()
         h_layout = QHBoxLayout(container)
         h_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Комбобокс (книги) с вводом нового
+        # Комбобокс (книги)
         combo = QComboBox()
         combo.setEditable(True)
         combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         combo.addItems(self.books_list)
-        if initial_text:
-            combo.setCurrentText(initial_text)
-        else:
-            combo.setCurrentText("")
+        combo.setCurrentText(initial_text)
         if combo.lineEdit():
             combo.lineEdit().setPlaceholderText("Выберите книгу или введите новую")
         completer = QCompleter(self.books_list)
@@ -176,6 +175,11 @@ class StudentDialog(QDialog):
             return_edit.setDate(QDate.currentDate())
         h_layout.addWidget(return_edit)
 
+        # Чекбокс "Сдана"
+        returned_checkbox = QCheckBox("Сдана")
+        returned_checkbox.setChecked(initial_returned)
+        h_layout.addWidget(returned_checkbox)
+
         # Кнопка удаления селектора
         delete_btn = QPushButton()
         delete_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
@@ -184,7 +188,7 @@ class StudentDialog(QDialog):
 
         # Видимость полей дат
         def update_fields(opt_text):
-            show_i = opt_text in ["Указать дату выдачи", "Указать дату выдачи и сдачи"]
+            show_i = opt_text in ["Указать дату выдачи", "Указать дату выдачи и здачи"]
             show_r = opt_text in ["Указать дату сдачи", "Указать дату выдачи и сдачи"]
             issue_edit.setVisible(show_i)
             return_edit.setVisible(show_r)
@@ -193,13 +197,14 @@ class StudentDialog(QDialog):
         update_fields(initial_option)
 
         # Добавление селектора
-        self.book_selectors.append((container, combo, option, issue_edit, return_edit))
+        self.book_selectors.append((container, combo, option, issue_edit, return_edit, returned_checkbox))
         self.books_layout.addWidget(container)
         delete_btn.clicked.connect(lambda: self.remove_book_selector(container))
         self.update_delete_buttons()
 
     def remove_book_selector(self, container):
-        for i, (cont, combo, opt, ie, re) in enumerate(self.book_selectors):
+        for i, selector in enumerate(self.book_selectors):
+            cont = selector[0]
             if cont is container:
                 self.book_selectors.pop(i)
                 cont.setParent(None)
@@ -209,20 +214,26 @@ class StudentDialog(QDialog):
 
     def update_delete_buttons(self):
         count = len(self.book_selectors)
-        for cont, combo, opt, ie, re in self.book_selectors:
+        for selector in self.book_selectors:
+            cont = selector[0]
             btn = cont.findChild(QPushButton)
             btn.setEnabled(count > 1)
 
     def get_data(self):
         books = []
-        for container, combo, option, issue_edit, return_edit in self.book_selectors:
+        for container, combo, option, issue_edit, return_edit, returned_checkbox in self.book_selectors:
             text = combo.currentText().strip()
             if not text:
                 continue
             opt = option.currentText()
-            issue = issue_edit.date().toString("dd.MM.yyyy") if opt in ["Указать дату выдачи", "Указать дату выдачи и сдачи"] else ""
+            issue = issue_edit.date().toString("dd.MM.yyyy") if opt in ["Указать дату выдачи", "Указать дату сдачи"] else ""
             ret = return_edit.date().toString("dd.MM.yyyy") if opt in ["Указать дату сдачи", "Указать дату выдачи и сдачи"] else ""
-            books.append({"book": text, "issue_date": issue, "return_date": ret})
+            books.append({
+                "book": text,
+                "issue_date": issue,
+                "return_date": ret,
+                "returned": returned_checkbox.isChecked()
+            })
         return {
             "last_name": self.last_name_edit.text().strip(),
             "first_name": self.first_name_edit.text().strip(),

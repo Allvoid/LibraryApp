@@ -13,12 +13,18 @@ from .db import get_connection, init_db
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Initialize database and migration: add return_date column if missing
+# Initialize database and migration: add return_date and returned columns if missing
 init_db()
 conn = get_connection()
 cursor = conn.cursor()
+# Add return_date column
 try:
     cursor.execute("ALTER TABLE student_books ADD COLUMN return_date TEXT")
+except Exception:
+    pass
+# Add returned flag column
+try:
+    cursor.execute("ALTER TABLE student_books ADD COLUMN returned INTEGER DEFAULT 0")
 except Exception:
     pass
 conn.commit()
@@ -43,9 +49,10 @@ def load_students():
             "parallel": row["parallel"],
             "books": []
         }
+        # Fetch books with issue, return dates and returned flag
         cursor.execute(
             """
-            SELECT sb.due_date, sb.return_date, b.title, b.author
+            SELECT sb.due_date, sb.return_date, sb.returned, b.title, b.author
             FROM student_books sb
             JOIN books b ON sb.book_id = b.id
             WHERE sb.student_id = ?
@@ -56,6 +63,7 @@ def load_students():
         for brow in book_rows:
             due_iso = brow["due_date"]
             return_iso = brow["return_date"] if "return_date" in brow.keys() else None
+            returned_flag = bool(brow["returned"]) if "returned" in brow.keys() else False
             issue_date = ""
             return_date = ""
             if due_iso:
@@ -70,7 +78,8 @@ def load_students():
             student["books"].append({
                 "book": display_str,
                 "issue_date": issue_date,
-                "return_date": return_date
+                "return_date": return_date,
+                "returned": returned_flag
             })
         students.append(student)
     conn.close()
@@ -122,6 +131,7 @@ def save_students(students):
                 continue
             issue_str = book_entry.get("issue_date", "")
             return_str = book_entry.get("return_date", "")
+            returned_flag = 1 if book_entry.get("returned", False) else 0
             # Преобразуем даты в ISO
             qd = QDate.fromString(issue_str, "dd.MM.yyyy")
             issue_iso = qd.toString("yyyy-MM-dd") if qd.isValid() else None
@@ -136,7 +146,6 @@ def save_students(students):
             if row_book:
                 book_id = row_book["id"]
             else:
-                # Создаём новую книгу, если не нашли
                 if " - " in display_str:
                     title, author = display_str.split(" - ", 1)
                 else:
@@ -146,13 +155,13 @@ def save_students(students):
                     (title.strip(), author.strip(), None)
                 )
                 book_id = cursor.lastrowid
-            # Вставляем запись выдачи
+            # Вставляем запись выдачи с флагом returned
             cursor.execute(
                 """
-                INSERT INTO student_books (student_id, book_id, due_date, return_date)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO student_books (student_id, book_id, due_date, return_date, returned)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (sid, book_id, issue_iso or '', return_iso or '')
+                (sid, book_id, issue_iso or '', return_iso or '', returned_flag)
             )
     # Удаляем студентов, которых нет в новом списке
     to_delete = existing_ids - new_ids

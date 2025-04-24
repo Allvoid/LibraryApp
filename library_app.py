@@ -220,13 +220,28 @@ class LibraryApp(QWidget):
         self.readers_page.refresh()
 
     def add_class(self):
-        new_class = self.config_page.new_class_edit.text().strip()
-        if new_class and new_class not in self.config.get("classes", []):
-            self.config["classes"].append(new_class)
-            save_config(self.config)
-            self.config_page.refresh()
-            self.readers_page.refresh()
-            self.config_page.new_class_edit.clear()
+            new_class = self.config_page.new_class_edit.text().strip()
+            if new_class and new_class not in self.config.get("classes", []):
+                self.config["classes"].append(new_class)
+                # Сортировка списка классов по возрастанию (числовая)
+                self.config["classes"].sort(key=lambda x: int(x))
+                save_config(self.config)
+                self.config_page.refresh()
+                self.readers_page.refresh()
+                self.config_page.new_class_edit.clear()
+
+    def add_parallel(self):
+            new_parallel = self.config_page.new_parallel_edit.text().strip()
+            # Обеспечиваем, что первая буква будет заглавной
+            new_parallel = new_parallel.capitalize()
+            if new_parallel and new_parallel not in self.config.get("parallels", []):
+                self.config["parallels"].append(new_parallel)
+                # Сортировка списка параллелей по алфавиту (без учёта регистра)
+                self.config["parallels"].sort(key=lambda x: x.lower())
+                save_config(self.config)
+                self.config_page.refresh()
+                self.readers_page.refresh()
+                self.config_page.new_parallel_edit.clear()
 
     def delete_class(self):
         selected = self.config_page.classes_list_widget.selectedItems()
@@ -238,15 +253,6 @@ class LibraryApp(QWidget):
             save_config(self.config)
             self.config_page.refresh()
             self.readers_page.refresh()
-
-    def add_parallel(self):
-        new_parallel = self.config_page.new_parallel_edit.text().strip()
-        if new_parallel and new_parallel not in self.config.get("parallels", []):
-            self.config["parallels"].append(new_parallel)
-            save_config(self.config)
-            self.config_page.refresh()
-            self.readers_page.refresh()
-            self.config_page.new_parallel_edit.clear()
 
     def delete_parallel(self):
         selected = self.config_page.parallels_list_widget.selectedItems()

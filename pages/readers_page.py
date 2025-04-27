@@ -216,38 +216,43 @@ class ReadersPage(QWidget):
         QTimer.singleShot(0, self.check_and_load_more)
 
     def set_student_row(self, row, data):
-        # Основные поля
-        for i, key in enumerate(["last_name", "first_name", "middle_name", "class", "parallel"]):
-            self.readers_table.setItem(row, i, QTableWidgetItem(data.get(key, "")))
-        # Книги
-        books = [b.get("book", "") for b in data.get("books", [])]
-        self.readers_table.setItem(row, 5, QTableWidgetItem(", ".join(books)))
-        # Даты и подсветка просрочек
-        date_lines = []
-        overdue = False
-        today = QDate.currentDate()
-        for b in data.get("books", []):
-            issue = b.get("issue_date", "")
-            ret = b.get("return_date", "")
-            if issue and ret:
-                date_lines.append(f"{issue} - {ret}")
-            elif issue:
-                date_lines.append(f"{issue} (выдана)")
-            elif ret:
-                date_lines.append(f"{ret} (сдача)")
-            if ret:
-                rd = QDate.fromString(ret, "dd.MM.yyyy")
-                if rd.isValid() and rd < today:
-                    overdue = True
-        if not date_lines:
-            self.readers_table.setSpan(row, 5, 1, 2)
-        item_date = QTableWidgetItem("\n".join(date_lines))
-        self.readers_table.setItem(row, 6, item_date)
-        if overdue:
-            for col in range(self.readers_table.columnCount()):
-                cell = self.readers_table.item(row, col)
-                if cell:
-                    cell.setBackground(QBrush(QColor('#ffa0a0')))
+            # Основные поля
+            for i, key in enumerate(["last_name", "first_name", "middle_name", "class", "parallel"]):
+                self.readers_table.setItem(row, i, QTableWidgetItem(data.get(key, "")))
+            # Книги
+            books = [b.get("book", "") for b in data.get("books", [])]
+            self.readers_table.setItem(row, 5, QTableWidgetItem(", ".join(books)))
+            # Даты и подсветка просрочек
+            date_lines = []
+            overdue = False
+            today = QDate.currentDate()
+            for b in data.get("books", []):
+                issue = b.get("issue_date", "")
+                ret = b.get("return_date", "")
+                returned = b.get("returned", False)
+                # Формируем текст для даты
+                if issue and ret:
+                    date_lines.append(f"{issue} - {ret}")
+                elif issue:
+                    date_lines.append(f"{issue} (выдана)")
+                elif ret:
+                    date_lines.append(f"{ret} (сдача)")
+                # Проверяем только невозвращенные книги
+                if ret and not returned:
+                    rd = QDate.fromString(ret, "dd.MM.yyyy")
+                    if rd.isValid() and rd < today:
+                        overdue = True
+            if not date_lines:
+                # Если нет дат, объединяем колонки Книги и Даты
+                self.readers_table.setSpan(row, 5, 1, 2)
+            item_date = QTableWidgetItem("\n".join(date_lines))
+            self.readers_table.setItem(row, 6, item_date)
+            # Подсветка строки, если есть просрочка среди невозвращенных
+            if overdue:
+                for col in range(self.readers_table.columnCount()):
+                    cell = self.readers_table.item(row, col)
+                    if cell:
+                        cell.setBackground(QBrush(QColor('#ffa0a0')))
 
     def refresh_filters(self):
         cur_cls = self.class_filter.currentText()

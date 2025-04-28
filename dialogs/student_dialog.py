@@ -120,9 +120,6 @@ class StudentDialog(QDialog):
 
     def add_book_selector(self, initial_text="", initial_option="Не указывать даты",
                           initial_issue=None, initial_return=None, initial_returned=False):
-        """
-        Добавляет селектор для книги с возможностью ввода новой записи, чекбоксом "Сдана" и поддержкой начального состояния.
-        """
         container = QWidget()
         h_layout = QHBoxLayout(container)
         h_layout.setContentsMargins(0, 0, 0, 0)
@@ -188,7 +185,7 @@ class StudentDialog(QDialog):
 
         # Видимость полей дат
         def update_fields(opt_text):
-            show_i = opt_text in ["Указать дату выдачи", "Указать дату выдачи и здачи"]
+            show_i = opt_text in ["Указать дату выдачи", "Указать дату выдачи и сдачи"]
             show_r = opt_text in ["Указать дату сдачи", "Указать дату выдачи и сдачи"]
             issue_edit.setVisible(show_i)
             return_edit.setVisible(show_r)
@@ -196,7 +193,6 @@ class StudentDialog(QDialog):
         option.currentTextChanged.connect(update_fields)
         update_fields(initial_option)
 
-        # Добавление селектора
         self.book_selectors.append((container, combo, option, issue_edit, return_edit, returned_checkbox))
         self.books_layout.addWidget(container)
         delete_btn.clicked.connect(lambda: self.remove_book_selector(container))
@@ -225,9 +221,19 @@ class StudentDialog(QDialog):
             text = combo.currentText().strip()
             if not text:
                 continue
-            opt = option.currentText()
-            issue = issue_edit.date().toString("dd.MM.yyyy") if opt in ["Указать дату выдачи", "Указать дату сдачи"] else ""
-            ret = return_edit.date().toString("dd.MM.yyyy") if opt in ["Указать дату сдачи", "Указать дату выдачи и сдачи"] else ""
+            mode = option.currentText()
+            if mode == "Указать дату выдачи":
+                issue = issue_edit.date().toString("dd.MM.yyyy")
+                ret = ""
+            elif mode == "Указать дату сдачи":
+                issue = ""
+                ret = return_edit.date().toString("dd.MM.yyyy")
+            elif mode == "Указать дату выдачи и сдачи":
+                issue = issue_edit.date().toString("dd.MM.yyyy")
+                ret = return_edit.date().toString("dd.MM.yyyy")
+            else:
+                issue = ""
+                ret = ""
             books.append({
                 "book": text,
                 "issue_date": issue,

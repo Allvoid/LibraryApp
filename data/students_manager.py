@@ -1,69 +1,59 @@
 # data/students_manager.py
+
 from PyQt6.QtCore import QDate
 from .db import get_connection, init_db
 
 # Copyright 2025 Your Name
 # Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#     http://www.apache.org/licenses/LICENSE-2.0
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# ...
 
-# Initialize database and migration: add return_date and returned columns if missing
+# Инициализация БД (создание таблиц и миграций)
 init_db()
-conn = get_connection()
-cursor = conn.cursor()
-# Add return_date column
-try:
-    cursor.execute("ALTER TABLE student_books ADD COLUMN return_date TEXT")
-except Exception:
-    pass
-# Add returned flag column
-try:
-    cursor.execute("ALTER TABLE student_books ADD COLUMN returned INTEGER DEFAULT 0")
-except Exception:
-    pass
-conn.commit()
-conn.close()
 
-# Ensure DB tables exist
-init_db()
 
 def load_students():
     conn = get_connection()
     cursor = conn.cursor()
+
+    # Получаем всех студентов
     cursor.execute("SELECT * FROM students")
     student_rows = cursor.fetchall()
     students = []
+
     for row in student_rows:
         student = {
-            "id": row["id"],
-            "last_name": row["last_name"],
-            "first_name": row["first_name"],
+            "id":          row["id"],
+            "last_name":   row["last_name"],
+            "first_name":  row["first_name"],
             "middle_name": row["middle_name"],
-            "class": row["class"],
-            "parallel": row["parallel"],
-            "books": []
+            "class":       row["class"],
+            "parallel":    row["parallel"],
+            "books":       []
         }
-        # Fetch books with issue, return dates and returned flag
+
+        # Извлекаем и библиотечные, и пользовательские книги
         cursor.execute(
             """
-            SELECT sb.due_date, sb.return_date, sb.returned, b.title, b.author
+            SELECT
+              sb.book_id,
+              sb.due_date,
+              sb.return_date,
+              sb.returned,
+              sb.custom_title,
+              sb.custom_author,
+              b.title  AS lib_title,
+              b.author AS lib_author
             FROM student_books sb
-            JOIN books b ON sb.book_id = b.id
+            LEFT JOIN books b ON sb.book_id = b.id
             WHERE sb.student_id = ?
             """,
             (row["id"],)
         )
-        book_rows = cursor.fetchall()
-        for brow in book_rows:
-            due_iso = brow["due_date"]
-            return_iso = brow["return_date"] if "return_date" in brow.keys() else None
-            returned_flag = bool(brow["returned"]) if "returned" in brow.keys() else False
+
+        for rb in cursor.fetchall():
+            # Преобразуем даты в формат dd.MM.yyyy
+            due_iso = rb["due_date"] or ""
+            return_iso = rb["return_date"] or ""
             issue_date = ""
             return_date = ""
             if due_iso:
@@ -74,14 +64,32 @@ def load_students():
                 qr = QDate.fromString(return_iso, "yyyy-MM-dd")
                 if qr.isValid():
                     return_date = qr.toString("dd.MM.yyyy")
-            display_str = f'{brow["title"]} - {brow["author"]}'
+            returned_flag = bool(rb["returned"])
+
+            # Определяем источник title/author
+            if rb["book_id"] is not None:
+                title = rb["lib_title"] or ""
+                author = rb["lib_author"] or ""
+            else:
+                title = rb["custom_title"] or ""
+                author = rb["custom_author"] or ""
+
+            # Формируем строку для отображения
+            if author:
+                display_str = f"{title} - {author}"
+            else:
+                display_str = title
+
+            # Добавляем запись в student["books"]
             student["books"].append({
-                "book": display_str,
-                "issue_date": issue_date,
+                "book":        display_str,
+                "issue_date":  issue_date,
                 "return_date": return_date,
-                "returned": returned_flag
+                "returned":    returned_flag
             })
+
         students.append(student)
+
     conn.close()
     return students
 
@@ -89,13 +97,16 @@ def load_students():
 def save_students(students):
     conn = get_connection()
     cursor = conn.cursor()
-    # Получаем существующих студентов
+
+    # Существующие студенты
     cursor.execute("SELECT id FROM students")
-    existing_ids = {row["id"] for row in cursor.fetchall()}
+    existing_ids = {r["id"] for r in cursor.fetchall()}
     new_ids = set()
+
     for student in students:
-        # Вставка или обновление студента
-        if "id" in student and student["id"] in existing_ids:
+        # Добавление/обновление студента
+        if student.get("id") in existing_ids:
+            sid = student["id"]
             cursor.execute(
                 """
                 UPDATE students
@@ -103,11 +114,14 @@ def save_students(students):
                 WHERE id = ?
                 """,
                 (
-                    student["last_name"], student["first_name"], student["middle_name"],
-                    student["class"], student["parallel"], student["id"]
+                    student["last_name"],
+                    student["first_name"],
+                    student["middle_name"],
+                    student["class"],
+                    student["parallel"],
+                    sid
                 )
             )
-            sid = student["id"]
         else:
             cursor.execute(
                 """
@@ -115,58 +129,80 @@ def save_students(students):
                 VALUES (?, ?, ?, ?, ?)
                 """,
                 (
-                    student["last_name"], student["first_name"], student["middle_name"],
-                    student["class"], student["parallel"]
+                    student["last_name"],
+                    student["first_name"],
+                    student["middle_name"],
+                    student["class"],
+                    student["parallel"]
                 )
             )
             sid = cursor.lastrowid
             student["id"] = sid
+
         new_ids.add(sid)
-        # Сбрасываем старые записи выдачи
+
+        # Очищаем старые записи выдачи
         cursor.execute("DELETE FROM student_books WHERE student_id = ?", (sid,))
-        # Обрабатываем книги студента
-        for book_entry in student.get("books", []):
-            display_str = book_entry.get("book", "").strip()
-            if not display_str:
+
+        # Сохраняем новые выдачи
+        for be in student.get("books", []):
+            disp = be.get("book", "").strip()
+            if not disp:
                 continue
-            issue_str = book_entry.get("issue_date", "")
-            return_str = book_entry.get("return_date", "")
-            returned_flag = 1 if book_entry.get("returned", False) else 0
-            # Преобразуем даты в ISO
-            qd = QDate.fromString(issue_str, "dd.MM.yyyy")
+
+            # Даты обратно в ISO
+            qd = QDate.fromString(be.get("issue_date", ""), "dd.MM.yyyy")
             issue_iso = qd.toString("yyyy-MM-dd") if qd.isValid() else None
-            qr = QDate.fromString(return_str, "dd.MM.yyyy")
+            qr = QDate.fromString(be.get("return_date", ""), "dd.MM.yyyy")
             return_iso = qr.toString("yyyy-MM-dd") if qr.isValid() else None
-            # Ищем книгу в библиотеке
-            cursor.execute(
-                "SELECT id FROM books WHERE title || ' - ' || author = ?",
-                (display_str,)
-            )
-            row_book = cursor.fetchone()
-            if row_book:
-                book_id = row_book["id"]
+            returned_flag = 1 if be.get("returned", False) else 0
+
+            # Разбор display_str на title и author
+            if " - " in disp:
+                title, author = disp.split(" - ", 1)
             else:
-                if " - " in display_str:
-                    title, author = display_str.split(" - ", 1)
-                else:
-                    title, author = display_str, ""
-                cursor.execute(
-                    "INSERT INTO books (title, author, quantity) VALUES (?, ?, ?)",
-                    (title.strip(), author.strip(), None)
-                )
-                book_id = cursor.lastrowid
-            # Вставляем запись выдачи с флагом returned
+                title, author = disp, ""
+            title = title.strip()
+            author = author.strip()
+
+            # Проверяем наличие в books
+            cursor.execute(
+                "SELECT id FROM books WHERE title = ? AND author = ?",
+                (title, author)
+            )
+            book_row = cursor.fetchone()
+            if book_row:
+                book_id = book_row["id"]
+                custom_title = None
+                custom_author = None
+            else:
+                book_id = None
+                custom_title = title
+                custom_author = author
+
+            # Вставляем запись выдачи в student_books
             cursor.execute(
                 """
-                INSERT INTO student_books (student_id, book_id, due_date, return_date, returned)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO student_books
+                  (student_id, book_id, due_date, return_date, returned, custom_title, custom_author)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (sid, book_id, issue_iso or '', return_iso or '', returned_flag)
+                (
+                    sid,
+                    book_id,
+                    issue_iso or '',
+                    return_iso or '',
+                    returned_flag,
+                    custom_title,
+                    custom_author
+                )
             )
-    # Удаляем студентов, которых нет в новом списке
+
+    # Удаляем студентов, которых больше нет
     to_delete = existing_ids - new_ids
     for sid in to_delete:
         cursor.execute("DELETE FROM student_books WHERE student_id = ?", (sid,))
         cursor.execute("DELETE FROM students WHERE id = ?", (sid,))
+
     conn.commit()
     conn.close()
